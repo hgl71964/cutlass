@@ -239,7 +239,7 @@ public:
       ldc(args.ldc),
       ldd(args.ldd)
     { 
-
+      printf("[Init Params]: threadblock_count = %d, tile_count = %d, problem_count = %d\n", threadblock_count, tile_count, args.problem_count);
     }
 
     CUTLASS_HOST_DEVICE

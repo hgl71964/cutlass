@@ -33,5 +33,9 @@ cutlass_example_add_executable(
   24_gemm_grouped
   gemm_grouped.cu
   )
+cutlass_example_add_executable(
+  streamk_grouped_gemm
+  streamk_grouped_gemm.cu
+  )
 
 

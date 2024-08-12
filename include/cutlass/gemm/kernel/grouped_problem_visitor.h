@@ -52,7 +52,9 @@ enum class GroupScheduleMode {
   // Perform all scheduling on device
   kDeviceOnly,
   // Precompute on the host the full sequence of problems to access
-  kHostPrecompute
+  kHostPrecompute,
+
+  mixedStreamK,
 };
 
 /// Visitor class to abstract away the algorithm for iterating over tiles
@@ -233,6 +235,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   {
     this->problem_idx = -1 * kThreadsPerWarp;
     this->problem_tile_start = 0;
+
+    if ((block_idx == 0 || block_idx == 1) && threadIdx.x == 0) {
+      printf("tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile);
+    }
+
   }
 
   CUTLASS_DEVICE
@@ -314,6 +321,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       this->problem_tile_start = __shfl_sync(0xffffffff, problem_ending_tile, problem_idx_in_group - 1);
     }
 
+    if ((blockIdx.x == 0) && threadIdx.x == 0) {
+      // printf("[NEXT] tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d , problem_tile_end: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile, problem_tile_end);
+
+      printf("[Next] tiled_idx: %d, problem_tile_start: %d, problem_tile_end: %d, group_tile_start: %d, group_tile_end: %d, problem_idx: %d, problem_index_in_group: %d\n", this->tile_idx, this->problem_tile_start, problem_tile_end, group_tile_start, group_tile_end, this->problem_idx, problem_idx_in_group);
+    }
+
     return true;
   }
 
@@ -378,6 +391,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   {
     iterations_per_block = (params_.tile_count - 1 + gridDim.x) / gridDim.x;
     block_load_start = iterations_per_block * block_idx;
+
+    if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
+      printf("tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
+    }
+
     // Start prefetching the first set of tiles to compute
     prefetch_tiles();
   }
@@ -406,6 +424,153 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     this->problem_idx = problem_info.problem_idx;
     this->problem_tile_start = problem_info.problem_start;
+
+    if ((blockIdx.x == 0) && threadIdx.x == 0) {
+      // printf("[NEXT] tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d , problem_tile_end: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile, problem_tile_end);
+      printf("[Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
+    }
+
+    return true;
+  }
+
+  static size_t get_workspace_size(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
+                                   int32_t problem_count,
+                                   int32_t block_count) {
+    int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
+    int32_t entries_per_block = ((total_tiles - 1 + block_count) / block_count);
+    return sizeof(ProblemInfo) * entries_per_block * block_count;
+  }
+#if !defined(__CUDACC_RTC__)
+  static void host_precompute(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
+                              int32_t problem_count,
+                              int32_t block_count,
+                              void* host_workspace_ptr) {
+    ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(host_workspace_ptr);
+    int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
+    int32_t entries_per_block = (total_tiles - 1 + block_count) / block_count;
+
+    int tile = 0;
+    int start_tile = 0;
+    for (int p_idx = 0; p_idx < problem_count; ++p_idx) {
+      auto problem = host_problem_sizes_ptr[p_idx];
+      Base::possibly_transpose_problem(problem);
+      auto grid = Base::grid_shape(problem);
+      int tiles = Base::tile_count(grid);
+      ProblemInfo problem_info(p_idx, start_tile);
+      for (int i = 0; i < tiles; ++i, ++tile) {
+        host_problem_info_ptr[(entries_per_block * (tile % block_count)) + (tile / block_count)] = problem_info;
+      }
+      start_tile += tiles;
+    }
+  }
+#endif
+private:
+  CUTLASS_DEVICE
+  void prefetch_tiles() {
+    CUTLASS_PRAGMA_UNROLL
+    for (int32_t i = 0; i < kPrefetchTileCount; i += kThreadCount) {
+      int32_t offset = threadIdx.x + i;
+      if (offset < kPrefetchTileCount && (tiles_computed + offset < iterations_per_block)) {
+        shared_storage.prefetched_problems[offset] = problem_info_ptr[block_load_start + tiles_computed + offset];
+      }
+    }
+  }
+};
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// mixed streamK
+//
+template <typename ProblemSizeHelper,
+          typename ThreadblockShape,
+          int PrefetchTileCount,
+          int ThreadCount>
+struct GroupedProblemVisitor<ProblemSizeHelper,
+                             ThreadblockShape,
+                             GroupScheduleMode::mixedStreamK,
+                             PrefetchTileCount,
+                             ThreadCount> : public BaseGroupedProblemVisitor<ProblemSizeHelper, ThreadblockShape> {
+  static_assert(PrefetchTileCount > 0,
+                "mixedStreamK currently requires prefetching to shared memory");
+
+  using Base = BaseGroupedProblemVisitor<ProblemSizeHelper, ThreadblockShape>;
+  using Params = typename Base::Params;
+  using ProblemInfo = typename Base::ProblemInfo;
+  static bool const kRequiresPrecomputation = true;
+
+  static int const kPrefetchTileCount = PrefetchTileCount;
+  static int const kThreadCount = ThreadCount;
+
+  struct SharedStorage {
+    // Sequence of problem IDs and starting tiles to compute
+    cutlass::Array<ProblemInfo, kPrefetchTileCount> prefetched_problems;
+  };
+
+  int32_t tiles_computed;
+  int32_t iterations_per_block;
+  int32_t block_load_start;
+  SharedStorage &shared_storage;
+  ProblemInfo const *problem_info_ptr;
+
+
+  struct SkInfo {
+  }
+
+
+  //
+  // Methods
+  //
+  CUTLASS_DEVICE
+  GroupedProblemVisitor(
+    Params const &params_,
+    SharedStorage &shared_storage_,
+    int32_t block_idx
+  ): Base(params_, block_idx),
+  tiles_computed(0),
+  shared_storage(shared_storage_),
+  problem_info_ptr(reinterpret_cast<ProblemInfo const*>(params_.workspace))
+  {
+    iterations_per_block = (params_.tile_count - 1 + gridDim.x) / gridDim.x;
+    block_load_start = iterations_per_block * block_idx;
+
+    if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
+      printf("tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
+    }
+
+    // Start prefetching the first set of tiles to compute
+    prefetch_tiles();
+  }
+
+  CUTLASS_DEVICE
+  bool next_tile() {
+    if (this->tile_idx >= this->params.tile_count) {
+      return false;
+    }
+
+    int32_t prefetch_idx = (tiles_computed % kPrefetchTileCount);
+    if (prefetch_idx == 0) {
+      // Ensure all previous stores to shared memory have been completed
+      __syncthreads();
+    }
+
+    auto problem_info = shared_storage.prefetched_problems[prefetch_idx];
+    ++tiles_computed;
+
+    if ((tiles_computed % kPrefetchTileCount) == 0) {
+      // Begin prefetching next set of tiles. Synchronize first to ensure that
+      // we don't overwrite the current buffer while someone else is using it.
+      __syncthreads();
+      prefetch_tiles();
+    }
+
+    this->problem_idx = problem_info.problem_idx;
+    this->problem_tile_start = problem_info.problem_start;
+
+    if ((blockIdx.x == 0) && threadIdx.x == 0) {
+      // printf("[NEXT] tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d , problem_tile_end: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile, problem_tile_end);
+      printf("[Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
+    }
 
     return true;
   }

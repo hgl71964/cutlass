@@ -189,6 +189,8 @@ protected:
       "sm_occupancy: (" << sm_occupancy_ << ") "
       "smem_size: (" << kSharedStorageSize << ") "
       "GemmKernel::kThreadCount: (" << GemmKernel::kThreadCount << ")");
+    
+    std::cout << "device ordinal: " << device_ordinal_ << ", device_sms: " << device_sms_ << ", sm_occupancy: " << sm_occupancy_ << ", smem_size: " << kSharedStorageSize << ", GemmKernel::kThreadCount: " << GemmKernel::kThreadCount << std::endl;
 
     return Status::kSuccess;
   }
@@ -257,6 +259,9 @@ protected:
 
     // Initialize params member
     params_ = typename GemmKernel::Params(args, device_sms, sm_occupancy);
+    std::cout << "[GeMMUniversalBase] get tile shape: " << params_.get_tiled_shape() << " get grid dims: " << params_.get_grid_dims() << " total num blocks: " << params_.get_grid_blocks() << std::endl;
+    std::cout  << std::endl;
+
     return Status::kSuccess;
   }
 
@@ -384,6 +389,12 @@ public:
   {
     CUTLASS_TRACE_HOST("GemmUniversalBase::initialize() - workspace "
       << workspace << ", stream: " << (stream ? "non-null" : "null"));
+    
+    std::cout << std::endl;
+    std::cout << "[GemmUniversalBase::initialize()]" << std::endl;
+    std::cout << "problem: " << args.problem_size << std::endl;
+    // std::cout << "stride_a: " << args.stride_a << " stride_b: " << args.stride_b << " stride_c: " << args.stride_c << " stride_d: " << args.stride_d << "" << std::endl;
+    std::cout << "lda: " << args.lda << " ldb: " << args.ldb << " ldc: " << args.ldc << " ldd: " << args.ldd << "" << std::endl;
 
     // Initialize parameters from args
     Status result = init_params(args, cuda_adapter);
@@ -416,6 +427,12 @@ public:
     // Configure grid and block dimensions
     dim3 block(GemmKernel::kThreadCount, 1, 1);
     dim3 grid = params_.get_grid_dims();
+
+    std::cout << "  grid: (" << grid << "), block: (" << block << ")" << std::endl;
+    std::cout << "kEnableCudaHostAdapter: " << kEnableCudaHostAdapter << std::endl;
+
+    std::cout << "[LAUNCH]: " << std::endl;
+    std::cout << std::endl;
 
     // Launch kernel
     CUTLASS_TRACE_HOST("  "

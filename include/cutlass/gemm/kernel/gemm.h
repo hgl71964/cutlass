@@ -226,6 +226,15 @@ struct Gemm {
       threadblock_tile_offset.n() * Mma::Shape::kN
     };
 
+    if (blockIdx.x == 2 && blockIdx.y == 1 && threadIdx.x == 0) {
+
+      // this is just block idx (when swizzle_log_tile=0)
+      printf("threadblock_tile_offset.m() = %d, threadblock_tile_offset.n() = %d threadblock_tile_offset.k() = %d\n", threadblock_tile_offset.m(), threadblock_tile_offset.n(), threadblock_tile_offset.k());
+
+      // row/col offset relative to A/B base ptr
+      printf("tb_offset_A.row() = %d, tb_offset_A.col() = %d, tb_offset_B.row() = %d, tb_offset_B.col() = %d\n", tb_offset_A.row(), tb_offset_A.column(), tb_offset_B.row(), tb_offset_B.column());
+    }
+
     // Problem size is a function of threadblock index in the K dimension
     int problem_size_k = min(
       params.problem_size.k(), 

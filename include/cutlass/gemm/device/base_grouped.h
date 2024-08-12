@@ -288,6 +288,9 @@ public:
   static int sufficient(const cutlass::gemm::GemmCoord* problem_sizes_ptr=nullptr,
                         int problem_count=0,
                         int available_sm_count=-1) {
+
+    std::cout << "[Sufficient] " << std::endl;
+
     // Determine the number of blocks that would be launched to fill up a single
     // wave on the GPU with each SM having maximum occupancy.
     int device_idx;
@@ -342,7 +345,12 @@ public:
     // which are not assigned tiles still need to perform the work of iterating through
     // problem sizes to determine that they have no work to do. This competes for cycles
     // with those threadblocks that are assigned tiles to compute.
-    return std::min(total_tiles, occupancy_based_block_count);
+    std::cout << "multiprocessor count: " << multiprocessor_count << " max_active_blocks: " << max_active_blocks << " occupancy_based_block_count: " << occupancy_based_block_count << " total_tiles: " << total_tiles << std::endl;
+
+    auto res = std::min(total_tiles, occupancy_based_block_count);
+    std::cout << "threadblock count: " << res << std::endl;
+    std::cout << "[Sufficient Done]" << std::endl;
+    return res;
   }
 
 
@@ -384,6 +392,10 @@ public:
       }
     }
 
+    std::cout << "[Initialize] - workspace "
+      << workspace << ", stream: " << (stream ? "non-null" : "null") << " smem: " << smem_size << std::endl;
+
+
     return Status::kSuccess;
   }
 
@@ -424,6 +436,11 @@ public:
 
     dim3 grid(params_.threadblock_count, 1, 1);
     dim3 block(BaseKernel::kThreadCount, 1, 1);
+
+    std::cout << "grid: " << grid.x << " " << grid.y << " " << grid.z << std::endl;
+    std::cout << "block: " << block.x << " " << block.y << " " << block.z << std::endl;
+    std::cout << "[LAUNCH]" << std::endl;
+    std::cout << std::endl;
 
     int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
 

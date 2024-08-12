@@ -1015,6 +1015,12 @@ protected:
     int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_sms;
     int reduce_start_block_idx = dp_start_block_idx + params.block_mapping.dp_blocks;
     int grid_padding_start_block_idx = reduce_start_block_idx + params.block_mapping.reduction_blocks;
+    if (threadIdx.x == 0 && blockIdx.x == 0)
+      printf("block_idx = %d, sk_padding_start_block_idx = %d, dp_start_block_idx = %d, reduce_start_block_idx = %d, grid_padding_start_block_idx = %d\n", block_idx, sk_padding_start_block_idx, dp_start_block_idx, reduce_start_block_idx, grid_padding_start_block_idx);
+    
+    // one-to-one mapping
+    // else if (threadIdx.x == 0)
+    //   printf("block idx = %d; actual block_idx: %d\n", blockIdx.x, block_idx);
 
     // Initialize tile work descriptor
     TileWorkDesc tile_work;

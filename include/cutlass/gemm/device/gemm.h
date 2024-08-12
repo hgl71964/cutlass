@@ -410,6 +410,12 @@ public:
       {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
       args.split_k_slices);
 
+
+    std::cout << "[INITIALIZE]: " << std::endl;
+    std::cout << "problem size: " << args.problem_size.m() << " " << args.problem_size.n() << " " << args.problem_size.k() << std::endl;
+    std::cout << "grid tiled shape: " << grid_shape.m() << " " << grid_shape.n() << " " << grid_shape.k() << std::endl;
+    std::cout << "kSplitKSerial: " << kSplitKSerial << " split_k_slices: " << args.split_k_slices << std::endl;
+
     if (kSplitKSerial) {
       if (args.split_k_slices > 1) {
         if (!workspace) {
@@ -447,6 +453,11 @@ public:
       args.scatter_D_indices
     };
 
+    std::cout << "[Params]: " << " gemm_k_size: "  << params_.gemm_k_size << ", swizzle_log_tile: " << params_.swizzle_log_tile << std::endl;
+
+    // std::cout << "A.stride: " << params_.params_A.stride_ << " "
+
+
     return Status::kSuccess;
   }
 
@@ -476,6 +487,13 @@ public:
 
     dim3 grid = threadblock_swizzle.get_grid_shape(params_.grid_tiled_shape);
     dim3 block(GemmKernel::kThreadCount, 1, 1);
+
+    std::cout << "[Device GEMM]" << std::endl;
+    std::cout << "grid tiled shape: " << params_.grid_tiled_shape.m() << " " << params_.grid_tiled_shape.n() << " " << params_.grid_tiled_shape.k() << std::endl;
+    std::cout << "swizzle: " << params_.swizzle_log_tile << std::endl;
+    std::cout << "grid: " << grid.x << " " << grid.y << " " << grid.z << std::endl;
+    std::cout << "block: " << block.x << " " << block.y << " " << block.z << std::endl;
+    std::cout << std::endl;
 
     cudaError_t result;
 

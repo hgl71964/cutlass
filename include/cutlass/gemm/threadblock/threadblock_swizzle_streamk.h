@@ -449,6 +449,8 @@ struct ThreadblockSwizzleStreamK {
     int waves = (output_tiles + avail_sms - 1) / avail_sms;
     [[maybe_unused]] float dp_efficiency = float(output_tiles) / float(waves * avail_sms);
 
+    std::cout << "batch_split: " << batch_split_ << ", output_tiles: " << output_tiles << ", waves: " << waves << " avail_sms: " << avail_sms << " dp_efficiency: " << dp_efficiency;
+
     //
     // Determine dispatch composition of DP-tiles and SK-blocks
     //
@@ -482,6 +484,7 @@ struct ThreadblockSwizzleStreamK {
     }
 
     sk_tiles = output_tiles - dp_tiles;
+    std::cout << ", dp_tiles: " << dp_tiles << ", sk_tiles: " << sk_tiles << ", sk_blocks: " << sk_blocks << std::endl;
 
 
     // Compute SK block iteration details
@@ -601,6 +604,8 @@ struct ThreadblockSwizzleStreamK {
     div_mod_tiled_cohort_shape_n = FastDivmod(tiled_cohort_shape.n());
     div_mod_iters_per_tile = FastDivmod(iters_per_tile);
 
+    std::cout<<"[ThreadblockSwizzleStreamK]: ";
+    this->Print();
   }
 
   /// Number of blocks performing useful work

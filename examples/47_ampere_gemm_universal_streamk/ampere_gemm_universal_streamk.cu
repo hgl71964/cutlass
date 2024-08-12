@@ -236,13 +236,13 @@ struct Options
   Options(std::string command_name) :
     command_name(command_name),
     help(false),
-    problem_size({2048, 2048, 2048}),
+    problem_size({512, 2048, 2048}),
     alpha(1.0f),
     beta(0.0f),
     split_k_factor(1),
     avail_sms(-1),              // Number of device SMs to use is unlimited
     reference_check(true),
-    iterations(10000)
+    iterations(0)
   {}
 
   bool valid() const
@@ -385,6 +385,9 @@ Result run(std::string description, Options &options)
   // Create a structure of gemm kernel arguments suitable for invoking an instance of DeviceGemmT
   auto arguments = args_from_options(device_gemm, options, options.tensor_a, options.tensor_b, options.tensor_c, options.tensor_d);
 
+
+
+
   // Using the arguments, query for extra workspace required for matrix multiplication computation
   size_t workspace_size = DeviceGemmT::get_workspace_size(arguments);
 
@@ -399,6 +402,11 @@ Result run(std::string description, Options &options)
 
   // Correctness / Warmup iteration
   CUTLASS_CHECK(device_gemm());
+
+
+
+
+
 
   // Copy output data from CUTLASS and reference kernel to host for comparison
   options.tensor_d.sync_host();
@@ -567,26 +575,27 @@ int main(int argc, const char **argv)
     printf("  Speedup vs Basic-DP: %.3f\n", (basic_dp.avg_runtime_ms / streamk_default.avg_runtime_ms));
 
     // Show that StreamK can emulate basic data-parallel GEMM when we set the number of SMs to load-balance across = 1
-    options.avail_sms       = 1;        // Set loadbalancing width to 1 SM (no load balancing)
-    Result streamk_dp       = run<DeviceGemmStreamK>("StreamK emulating basic data-parallel GEMM", options);
-    options.avail_sms       = -1;       // Reset loadbalancing width to unspecified SMs (i.e., the number of device SMs)
+    // options.avail_sms       = 1;        // Set loadbalancing width to 1 SM (no load balancing)
+    // Result streamk_dp       = run<DeviceGemmStreamK>("StreamK emulating basic data-parallel GEMM", options);
+    // options.avail_sms       = -1;       // Reset loadbalancing width to unspecified SMs (i.e., the number of device SMs)
 
-    printf("  Speedup vs Basic-DP: %.3f\n", (basic_dp.avg_runtime_ms / streamk_dp.avg_runtime_ms));
+    // printf("  Speedup vs Basic-DP: %.3f\n", (basic_dp.avg_runtime_ms / streamk_dp.avg_runtime_ms));
 
-    options.split_k_factor++;     // Increment splitting factor for next evaluation
+    // options.split_k_factor++;     // Increment splitting factor for next evaluation
 
   }
 
   // Show that StreamK can emulate "Split-K" with a tile-splitting factor
-  Result basic_splitk = run<DeviceGemmBasic>(
-    std::string("Basic split-K GEMM with tile-splitting factor ") + std::to_string(options.split_k_factor),
-    options);
+  //
+  // Result basic_splitk = run<DeviceGemmBasic>(
+  //   std::string("Basic split-K GEMM with tile-splitting factor ") + std::to_string(options.split_k_factor),
+  //   options);
 
-  Result streamk_splitk = run<DeviceGemmStreamK>(
-    std::string("StreamK emulating Split-K GEMM with tile-splitting factor ") + std::to_string(options.split_k_factor),
-    options);
+  // Result streamk_splitk = run<DeviceGemmStreamK>(
+  //   std::string("StreamK emulating Split-K GEMM with tile-splitting factor ") + std::to_string(options.split_k_factor),
+  //   options);
 
-  printf("  Speedup vs Basic-SplitK: %.3f\n", (basic_splitk.avg_runtime_ms / streamk_splitk.avg_runtime_ms));
+  // printf("  Speedup vs Basic-SplitK: %.3f\n", (basic_splitk.avg_runtime_ms / streamk_splitk.avg_runtime_ms));
 
   return 0;
 }
