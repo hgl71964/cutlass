@@ -374,6 +374,7 @@ Result run(std::string description, Options &options)
 {
   // Display test description
   std::cout << std::endl << description << std::endl;
+  std::cout << "====================================================" << std::endl;
 
   // Zero-initialize test output matrix D
   cutlass::reference::host::TensorFill(options.tensor_d.host_view());

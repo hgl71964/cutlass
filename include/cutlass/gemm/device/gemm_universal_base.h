@@ -233,12 +233,10 @@ protected:
         if (status != Status::kSuccess) {
           return status;
         }
-      }
-      else {
+      } else {
         return Status::kErrorInternal;
       }
-    }
-    else {
+    } else {
       CUTLASS_ASSERT(cuda_adapter == nullptr);
 
       // Initialize static device properties, if necessary
@@ -259,8 +257,6 @@ protected:
 
     // Initialize params member
     params_ = typename GemmKernel::Params(args, device_sms, sm_occupancy);
-    std::cout << "[GeMMUniversalBase] get tile shape: " << params_.get_tiled_shape() << " get grid dims: " << params_.get_grid_dims() << " total num blocks: " << params_.get_grid_blocks() << std::endl;
-    std::cout  << std::endl;
 
     return Status::kSuccess;
   }
@@ -398,6 +394,10 @@ public:
 
     // Initialize parameters from args
     Status result = init_params(args, cuda_adapter);
+
+    std::cout << "[GeMMUniversalBase] get tile shape: " << params_.get_tiled_shape() << " get grid dims: " << params_.get_grid_dims() << " total num blocks: " << params_.get_grid_blocks() << std::endl;
+    std::cout << std::endl;
+
     if (result != Status::kSuccess) {
       return result;
     }
@@ -407,6 +407,7 @@ public:
       return params_.init_workspace(workspace, stream);
     }
 
+    std::cout << "[GemmUniversalBase::initialize()] Done" << std::endl;
     return Status::kSuccess;
   }
 
@@ -449,8 +450,7 @@ public:
       else {
         return Status::kErrorInternal;
       }
-    }
-    else {
+    } else {
       CUTLASS_ASSERT(cuda_adapter == nullptr);
 
       Kernel2<GemmKernel><<<grid, block, kSharedStorageSize, stream>>>(params_);

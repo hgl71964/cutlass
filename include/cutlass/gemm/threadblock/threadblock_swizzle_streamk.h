@@ -449,6 +449,7 @@ struct ThreadblockSwizzleStreamK {
     int waves = (output_tiles + avail_sms - 1) / avail_sms;
     [[maybe_unused]] float dp_efficiency = float(output_tiles) / float(waves * avail_sms);
 
+    std::cout<<"[ThreadblockSwizzleStreamK]: ";
     std::cout << "batch_split: " << batch_split_ << ", output_tiles: " << output_tiles << ", waves: " << waves << " avail_sms: " << avail_sms << " dp_efficiency: " << dp_efficiency;
 
     //
@@ -604,7 +605,6 @@ struct ThreadblockSwizzleStreamK {
     div_mod_tiled_cohort_shape_n = FastDivmod(tiled_cohort_shape.n());
     div_mod_iters_per_tile = FastDivmod(iters_per_tile);
 
-    std::cout<<"[ThreadblockSwizzleStreamK]: ";
     this->Print();
   }
 

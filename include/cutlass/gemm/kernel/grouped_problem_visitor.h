@@ -39,6 +39,8 @@
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_coord.h"
 
+#include "cutlass/fast_math.h"
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -182,6 +184,16 @@ struct BaseGroupedProblemVisitor {
 
     return total_tiles;
   }
+
+  static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
+                              int32_t problem_count,
+                              int32_t block_count,
+                              //
+                              int num_sms,
+                              int sm_occupancy,
+                              GemmCoord thread_block_shape,
+                              //
+                              void* host_workspace_ptr) {}
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,7 +222,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   using Base = BaseGroupedProblemVisitor<ProblemSizeHelper, ThreadblockShape>;
   using Params = typename Base::Params;
   static int const kThreadCount = ThreadCount;
-  static bool const kRequiresPrecomputation = false;
+  static int const kRequiresPrecomputation = 0;
   static int const kThreadsPerWarp = 32;
 
   struct SharedStorage {};
@@ -360,7 +372,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   using Base = BaseGroupedProblemVisitor<ProblemSizeHelper, ThreadblockShape>;
   using Params = typename Base::Params;
   using ProblemInfo = typename Base::ProblemInfo;
-  static bool const kRequiresPrecomputation = true;
+  static int const kRequiresPrecomputation = 1;
 
   static int const kPrefetchTileCount = PrefetchTileCount;
   static int const kThreadCount = ThreadCount;
@@ -496,11 +508,21 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
   using Base = BaseGroupedProblemVisitor<ProblemSizeHelper, ThreadblockShape>;
   using Params = typename Base::Params;
-  using ProblemInfo = typename Base::ProblemInfo;
-  static bool const kRequiresPrecomputation = true;
+
+  static int const kRequiresPrecomputation = 2;
 
   static int const kPrefetchTileCount = PrefetchTileCount;
   static int const kThreadCount = ThreadCount;
+
+  // customized with sk info
+  struct ProblemInfo {
+    int32_t problem_idx;
+    int32_t problem_start;
+
+    CUTLASS_DEVICE
+    ProblemInfo(int32_t problem_idx_, int32_t problem_start_) :
+      problem_idx(problem_idx_), problem_start(problem_start_) {}
+  };
 
   struct SharedStorage {
     // Sequence of problem IDs and starting tiles to compute
@@ -513,9 +535,18 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   SharedStorage &shared_storage;
   ProblemInfo const *problem_info_ptr;
 
+  //
+  // heuristic
+  //
 
-  struct SkInfo {
-  }
+  //
+  static int const kMinItersPerSkBlock = 2;
+
+  /// Height in CTAs of a grid rasterization cohort
+  // static int const kCohortCtasM = 8;
+  // /// Width in CTAs of a grid rasterization cohort
+  // static int const kCohortCtasN = 4;
+  // static int const kCtasPerCohort = kCohortCtasN * kCohortCtasM;
 
 
   //
@@ -541,6 +572,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // Start prefetching the first set of tiles to compute
     prefetch_tiles();
   }
+
 
   CUTLASS_DEVICE
   bool next_tile() {
@@ -588,7 +620,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                               int32_t block_count,
                               void* host_workspace_ptr) {
     ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(host_workspace_ptr);
+
+    // total tiles for all gemm
     int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
+
+    // this assign tiles to each block
     int32_t entries_per_block = (total_tiles - 1 + block_count) / block_count;
 
     int tile = 0;
@@ -600,15 +636,215 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       int tiles = Base::tile_count(grid);
       ProblemInfo problem_info(p_idx, start_tile);
       for (int i = 0; i < tiles; ++i, ++tile) {
+
+        //
+        // for [0 - entries_per_block], it's the work belongs to block 0
+        //
+        // for problems 0, if it has 128 tiles (assume 128 sms), each sm takes one tile, 
+        // so its tiles are distributed across sms
+        //
         host_problem_info_ptr[(entries_per_block * (tile % block_count)) + (tile / block_count)] = problem_info;
       }
       start_tile += tiles;
     }
   }
 #endif
+
+  static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
+                              int32_t problem_count,
+                              int32_t block_count,
+                              //
+                              int num_sms,
+                              int sm_occupancy,
+                              GemmCoord thread_block_shape,
+                              //
+                              void* host_workspace_ptr) {
+    std::cout << "[Precompute] " << std::endl;
+    ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(host_workspace_ptr);
+
+
+    // total tiles for all gemm
+    int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
+
+    // this assign tiles to each block
+    int32_t entries_per_block = (total_tiles - 1 + block_count) / block_count;
+
+
+    //
+    // Determine dispatch composition of DP-tiles and SK-blocks
+    //
+    auto first_problem = host_problem_sizes_ptr[0];
+    int iters_per_tile = (first_problem.k() + thread_block_shape.k() - 1) / thread_block_shape.k();
+    int waves = (total_tiles + num_sms - 1) / num_sms;
+    float dp_efficiency = float(total_tiles) / float(waves * num_sms);
+    std::cout << "total_tiles: " << total_tiles << ", iters_per_tile: " << iters_per_tile << ", waves: " << waves << ", dp_efficiency: " << dp_efficiency << std::endl;
+
+    // Start with a DP-only configuration
+    int dp_tiles = total_tiles;     // Number of data-parallel tiles
+
+    //
+    // get_blocks
+    //
+    int full_waves = total_tiles / num_sms;
+    int full_waves_tiles = full_waves * num_sms;
+    int partial_wave_tiles = total_tiles - full_waves_tiles;
+    if (partial_wave_tiles == 0) {
+      // TODO Perfect quantization
+      assert(false);
+    }
+    if (full_waves < sm_occupancy) {
+      // cornor case: We're less than full GPU occupancy
+      assert(false);
+    }
+    if (sm_occupancy > 1) {
+      // ???
+      assert(false);
+    }
+
+    dp_tiles = full_waves_tiles - num_sms;  // this gives 1 wave to sk
+    int max_sk_occupancy = sm_occupancy - ((full_waves - 1) % sm_occupancy);
+
+    //
+    // get_sk_blocks
+    //
+    int sk_tiles = partial_wave_tiles + num_sms;
+    int sk_iters = sk_tiles * iters_per_tile;
+
+    int dp_equiv_waves = (sk_tiles + num_sms - 1) / num_sms;
+    int dp_equiv_iters = iters_per_tile * dp_equiv_waves;
+
+    int min_sk_blocks = fast_min(num_sms, sk_tiles + 1);
+    int max_sk_blocks = fast_min(num_sms * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
+
+    std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
+
+    // Number of thread blocks to produce the remaining SK tiles
+    int sk_blocks = 0;              
+    int savings_iters = INT_MIN;
+    {
+      // heuristic for picking sk_blocks
+      for (int trial_sk_blocks = min_sk_blocks; trial_sk_blocks <= max_sk_blocks; ++trial_sk_blocks) {
+        int sk_waves = (trial_sk_blocks + num_sms - 1) / num_sms;
+
+        int max_sk_iters_per_block = (sk_iters + trial_sk_blocks - 1) / trial_sk_blocks;
+        int sk_iter_equiv = max_sk_iters_per_block * sk_waves;
+
+        int num_peers = ((trial_sk_blocks + sk_tiles - 1) / sk_tiles) + 1;        // add one for alignment skew
+
+        float iter_cost = 0.02f * float(num_peers) * float(sk_iter_equiv);
+
+        if (trial_sk_blocks % sk_tiles == 0)
+        {
+          // aligned
+          num_peers = (trial_sk_blocks / sk_tiles);
+
+          iter_cost = 0.0f;
+        }
+
+        float peer_cost = 2.0f * float(num_peers);
+
+        float base_cost = 2.0f * float(sk_waves);
+
+        int fixup_iter_equiv = int(base_cost + iter_cost + peer_cost);
+
+        int trial_savings_iters = dp_equiv_iters - sk_iter_equiv - fixup_iter_equiv;
+
+        if (trial_savings_iters >= savings_iters) {
+            savings_iters = trial_savings_iters;
+            sk_blocks = trial_sk_blocks;
+        }
+      }
+    }
+    if (savings_iters < 0) {
+      // not profitable; TODO apply a dp setting
+      assert(false);
+    }
+
+
+    //
+    // post-process sk region
+    //
+    int sk_regions = 1;
+    int sk_iters_per_normal_block;
+    int reduction_blocks = 0;
+    bool remap_block_indices = false;
+    assert(sk_blocks > 0);
+    {
+      int sk_waves = (sk_blocks + num_sms - 1) / num_sms;
+      int sk_iters = sk_tiles * iters_per_tile;
+      sk_blocks = fast_min(sk_blocks, sk_iters);
+      sk_iters_per_normal_block = sk_iters / sk_blocks;
+      int extra_sk_iters = sk_iters - (sk_iters_per_normal_block * sk_blocks);
+      int sk_big_blocks = extra_sk_iters;
+      if ((sk_blocks > sk_tiles) && (sk_blocks % sk_tiles == 0)) {
+        // // Split-K decomposition
+        // sk_regions = sk_tiles;
+        assert(false);
+      }
+
+      int sk_blocks_per_region = sk_blocks / sk_regions;
+      int sk_big_blocks_per_region = sk_big_blocks / sk_regions;
+      int sk_iters_per_region = sk_iters / sk_regions;
+    }
+
+
+    //
+    // Compute DP blocks
+    // TODO: dont think we need cohort raster in grouped GEMM
+    //
+
+    int dp_blocks = dp_tiles;
+    // GemmCoord tiled_shape(
+    //   (first_problem.m() + thread_block_shape.m() - 1) / thread_block_shape.m(),
+    //   (first_problem.n() + thread_block_shape.n() - 1) / thread_block_shape.n(),
+    //   1);
+    // cutlass::gemm::GemmCoord tiled_cohort_shape(
+    //     (tiled_shape.m() + kCohortCtasM - 1) / kCohortCtasM,
+    //     (tiled_shape.n() + kCohortCtasN - 1) / kCohortCtasN,
+    //     tiled_shape.k());
+    // int cohort_blocks = (tiled_cohort_shape.m() * tiled_cohort_shape.n()) * kCtasPerCohort;
+    // float cohort_efficiency = float(dp_blocks) / float(cohort_blocks);
+
+
+
+
+
+    
+   
+
+
+    int tile = 0;
+    int start_tile = 0;
+    for (int p_idx = 0; p_idx < problem_count; ++p_idx) {
+      auto problem = host_problem_sizes_ptr[p_idx];
+      Base::possibly_transpose_problem(problem);
+      auto grid = Base::grid_shape(problem);
+      int tiles = Base::tile_count(grid);
+      ProblemInfo problem_info(p_idx, start_tile);
+      for (int i = 0; i < tiles; ++i, ++tile) {
+
+        //
+        // for [0 - entries_per_block], it's the work belongs to block 0
+        //
+        // for problems 0, if it has 128 tiles (assume 128 sms), each sm takes one tile, 
+        // so its tiles are distributed across sms
+        //
+        host_problem_info_ptr[(entries_per_block * (tile % block_count)) + (tile / block_count)] = problem_info;
+      }
+      start_tile += tiles;
+    }
+
+    std::cout << "[Precompute Done]" << std::endl;
+  }
 private:
   CUTLASS_DEVICE
   void prefetch_tiles() {
+
+    // 
+    // each thread has a problem visitor
+    // however the total amount of work is: (total_tiles - 1 + block_count) / block_count
+    //
+
     CUTLASS_PRAGMA_UNROLL
     for (int32_t i = 0; i < kPrefetchTileCount; i += kThreadCount) {
       int32_t offset = threadIdx.x + i;

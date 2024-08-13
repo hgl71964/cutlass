@@ -1031,8 +1031,7 @@ protected:
             (block_idx < grid_padding_start_block_idx) &&
             (ThreadblockSwizzle::kReductionStrategy == ThreadblockSwizzle::kMixed);
 
-    if (dp_block)
-    {
+    if (dp_block) {
       // This is a DP block
       int dp_block_idx = block_idx - dp_start_block_idx;
       int first_dp_tile = (params.block_mapping.cohort_raster) ? 0 : params.block_mapping.sk_tiles;
@@ -1058,9 +1057,7 @@ protected:
       {
         return;
       }
-    }
-    else if (sk_block)
-    {
+    } else if (sk_block) {
       // This is a SK block
       int block_iter_end;
       params.block_mapping.get_iter_extents(block_idx, block_iter_begin, block_iter_end);
@@ -1068,11 +1065,8 @@ protected:
 
       tile_idx = params.block_mapping.get_sk_tile_idx(block_iter_end - 1);
       init_sk_tile_work(tile_work, tile_idx, block_iter_begin, block_iter_begin + block_iters_remaining);
-    }
-    else
-    {
-      if (reduce_block)
-      {
+    } else {
+      if (reduce_block) {
         // This is a reduction threadblock
         int reduce_block_idx = block_idx - reduce_start_block_idx;
         separate_reduction(reduce_block_idx);

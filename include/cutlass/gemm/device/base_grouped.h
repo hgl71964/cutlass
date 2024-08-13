@@ -152,6 +152,37 @@ private:
     return copy_to_workspace(workspace, host_workspace.data(), workspace_bytes);
   }
 
+  Status precompute_streamk(Arguments const &args, int32_t tile_count, void* workspace) {
+    size_t workspace_bytes = get_workspace_size(args);
+    std::vector<uint8_t> host_workspace(workspace_bytes);
+
+    // gh512
+    int device_idx;
+    int sms;
+    cudaGetDevice(&device_idx);
+    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, device_idx);
+
+    int sm_occupancy = -1;
+    int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
+    cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+      &sm_occupancy,
+      Kernel<BaseKernel>,
+      BaseKernel::kThreadCount,
+      smem_size,
+      cudaOccupancyDisableCachingOverride);
+
+    BaseKernel::ProblemVisitor::host_precompute_streamk(args.host_problem_sizes,
+                                                args.problem_count,
+                                                args.threadblock_count,
+                                                // gh512
+                                                sms,
+                                                sm_occupancy,
+                                                {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
+
+                                                (void*)host_workspace.data());
+    return copy_to_workspace(workspace, host_workspace.data(), workspace_bytes);
+  }
+
   /// Reorder `data` according to `indices`
   template <typename T>
   static void reorder_array(T* data, const std::vector<size_t>& indices) {
@@ -345,10 +376,28 @@ public:
     // which are not assigned tiles still need to perform the work of iterating through
     // problem sizes to determine that they have no work to do. This competes for cycles
     // with those threadblocks that are assigned tiles to compute.
-    std::cout << "multiprocessor count: " << multiprocessor_count << " max_active_blocks: " << max_active_blocks << " occupancy_based_block_count: " << occupancy_based_block_count << " total_tiles: " << total_tiles << std::endl;
+    std::cout << "multiprocessor count: " << multiprocessor_count << ", max_active_blocks: " << max_active_blocks << ", occupancy_based_block_count: " << occupancy_based_block_count << ", total_tiles: " << total_tiles << std::endl;
 
     auto res = std::min(total_tiles, occupancy_based_block_count);
     std::cout << "threadblock count: " << res << std::endl;
+
+
+    // for moe, we ensure each only m dimension varies
+    int K = -1;
+    int N = -1;
+    for (int32_t i = 0; i < problem_count; ++i) {
+      cutlass::gemm::GemmCoord problem = problem_sizes_ptr[i];
+      BaseKernel::ProblemVisitor::possibly_transpose_problem(problem);
+      int k = problem.k();
+      int n = problem.n();
+      if (K == -1 && N == -1) {
+        K = k;
+        N = n;
+      } else {
+        assert(K == k && N == n);
+      }
+    }
+
     std::cout << "[Sufficient Done]" << std::endl;
     return res;
   }
@@ -367,17 +416,27 @@ public:
       return Status::kErrorWorkspaceNull;
     }
 
-    if (BaseKernel::ProblemVisitor::kRequiresPrecomputation) {
+    // precompute if needed
+    if (BaseKernel::ProblemVisitor::kRequiresPrecomputation==1) {
+
       int32_t tile_count = group_tile_count(args);
       Status status = precompute(args, tile_count, workspace);
       if (status != Status::kSuccess) {
         return status;
       }
-
       params_ = typename BaseKernel::Params(args, workspace, tile_count);
-    } else {
+
+    } else if (BaseKernel::ProblemVisitor::kRequiresPrecomputation==2) {
+
+      int32_t tile_count = group_tile_count(args);
+      Status status = precompute_streamk(args, tile_count, workspace);
+      if (status != Status::kSuccess) {
+        return status;
+      }
+      params_ = typename BaseKernel::Params(args, workspace, tile_count);
+      
+    } else 
       params_ = typename BaseKernel::Params(args, workspace);
-    }
 
     // Specify shared memory capacity for kernel.
     int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
@@ -402,23 +461,24 @@ public:
   /// Lightweight update given a subset of arguments
   Status update(Arguments const &args, void *workspace = nullptr) {
 
-    size_t workspace_bytes = get_workspace_size(args);
+    assert(false);
+    //size_t workspace_bytes = get_workspace_size(args);
 
-    if (workspace_bytes && !workspace) {
-      return Status::kErrorWorkspaceNull;
-    }
+    //if (workspace_bytes && !workspace) {
+    //  return Status::kErrorWorkspaceNull;
+    //}
 
-    if (BaseKernel::ProblemVisitor::kRequiresPrecomputation) {
-      int32_t tile_count = group_tile_count(args);
-      Status status = precompute(args, tile_count, workspace);
-      if (status != Status::kSuccess) {
-        return status;
-      }
+    //if (BaseKernel::ProblemVisitor::kRequiresPrecomputation) {
+    //  int32_t tile_count = group_tile_count(args);
+    //  Status status = precompute(args, tile_count, workspace);
+    //  if (status != Status::kSuccess) {
+    //    return status;
+    //  }
 
-      params_.update(args, workspace, tile_count);
-    } else {
-      params_.update(args, workspace);
-    }
+    //  params_.update(args, workspace, tile_count);
+    //} else {
+    //  params_.update(args, workspace);
+    //}
 
     return Status::kSuccess;
   }
