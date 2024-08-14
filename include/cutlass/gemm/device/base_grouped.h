@@ -178,6 +178,7 @@ private:
                                                 sms,
                                                 sm_occupancy,
                                                 {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
+                                                //
 
                                                 (void*)host_workspace.data());
     return copy_to_workspace(workspace, host_workspace.data(), workspace_bytes);
@@ -224,10 +225,15 @@ public:
 
   /// Gets the workspace size
   static size_t get_workspace_size(Arguments const &args) {
-    if (BaseKernel::ProblemVisitor::kRequiresPrecomputation) {
+    if (BaseKernel::ProblemVisitor::kRequiresPrecomputation==1) {
       return BaseKernel::ProblemVisitor::get_workspace_size(args.host_problem_sizes,
                                                             args.problem_count,
                                                             args.threadblock_count);
+    } else if (BaseKernel::ProblemVisitor::kRequiresPrecomputation==2) {
+      return BaseKernel::ProblemVisitor::get_workspace_size_streamk(args.host_problem_sizes,
+                                                                    args.problem_count,
+                                                                    args.threadblock_count);
+
     } else {
       return 0;
     }

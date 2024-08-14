@@ -767,6 +767,11 @@ struct ThreadblockSwizzleStreamK {
     int block_idx_in_region;
     div_mod_sk_blocks_per_region(region_idx, block_idx_in_region, sk_block_idx);
 
+    // only one region
+    assert(region_idx == 0);
+    assert(block_idx_in_region==sk_block_idx);
+    //
+
     block_iter_begin = (region_idx * sk_iters_per_region) + (block_idx_in_region * sk_iters_per_normal_block());
 
     // Adjust extents for the first "num_big_blocks" blocks that get one extra iteration

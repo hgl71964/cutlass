@@ -659,9 +659,9 @@ protected:
     return typename Mma::IteratorA(
         params.params_A,
         ptr_A,
-        { m_end, tile_work.k_end },
+        { m_end, tile_work.k_end },   // extend
         threadIdx.x,
-        { m_begin, tile_work.k_begin });
+        { m_begin, tile_work.k_begin }/* offset */);
 
   }
 
