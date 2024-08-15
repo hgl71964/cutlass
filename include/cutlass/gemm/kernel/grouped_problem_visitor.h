@@ -511,6 +511,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
   using Base = BaseGroupedProblemVisitor<ProblemSizeHelper, ThreadblockShape>;
   using Params = typename Base::Params;
+  using ProblemInfo = typename Base::ProblemInfo;
 
   static int const kRequiresPrecomputation = 2;
 
@@ -518,10 +519,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   static int const kThreadCount = ThreadCount;
 
   // customized with sk info
-  struct ProblemInfo {
-    int32_t problem_idx;
-    int32_t problem_start;
-
+  struct skInfo {
     int sk_regions;
     int dp_blocks;
     int dp_tiles;
@@ -530,19 +528,14 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_waves;
 
     CUTLASS_DEVICE
-    ProblemInfo(int32_t problem_idx_, int32_t problem_start_,
-    //
+    skInfo(
     int sk_regions,
     int dp_blocks,
     int dp_tiles,
     int sk_blocks,
     int sk_tiles,
     int sk_waves
-    //
-    ) : problem_idx(problem_idx_) 
-        ,problem_start(problem_start_)
-        //
-        ,sk_regions(sk_regions)
+    ) : sk_regions(sk_regions)
         ,dp_blocks(dp_blocks)
         ,dp_tiles(dp_tiles)
         ,sk_blocks(sk_blocks)
@@ -566,6 +559,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   //
   //
   int dp_start_tile_idx{0};
+  int dp_start_block_idx{0};
+  int32_t block_idx;
+  bool is_sk;
 
 
   //
@@ -593,12 +589,16 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   ): Base(params_, block_idx/*tile_idx*/),
   tiles_computed(0),
   shared_storage(shared_storage_),
-  problem_info_ptr(reinterpret_cast<ProblemInfo const*>(params_.workspace))
+  //problem_info_ptr(reinterpret_cast<ProblemInfo const*>(params_.workspace)),
+  problem_info_ptr(nullptr),
+  block_idx(block_idx)
   {
     //
     // sk related
     //
-    auto p = problem_info_ptr[0];
+    skInfo const *sk_info_ptr = reinterpret_cast<skInfo const*>(params_.workspace);
+    auto p = *sk_info_ptr;
+
     int dp_start_block_idx = p.sk_blocks * p.sk_waves;
     // in group gemm, tile_idx is all that matters?
     int dp_start_tile_idx = p.sk_tiles;
@@ -607,6 +607,16 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       printf("[SK]: dp_start_block_idx: %d, dp_start_tile_idx: %d\n", dp_start_block_idx, dp_start_tile_idx);
     }
     this->dp_start_tile_idx = dp_start_tile_idx;
+    this->dp_start_block_idx = dp_start_block_idx;
+    if (dp_start_block_idx>0)
+      is_sk = true;
+
+    // 
+    // advance to problem info ptr
+    //
+    char const* char_ptr = reinterpret_cast<char const*>(params_.workspace);
+    char_ptr += sizeof(skInfo);
+    this->problem_info_ptr = reinterpret_cast<ProblemInfo const*>(char_ptr);
 
     // 
     // group gemm
@@ -671,7 +681,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                                    int32_t block_count) {
     int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
     int32_t entries_per_block = ((total_tiles - 1 + block_count) / block_count);
-    return sizeof(ProblemInfo) * entries_per_block * block_count;
+    return sizeof(skInfo) + sizeof(ProblemInfo) * entries_per_block * block_count;
   }
   static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
                               int32_t problem_count,
@@ -683,14 +693,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                               //
                               void* host_workspace_ptr) {
     std::cout << "[Precompute] " << std::endl;
-    ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(host_workspace_ptr);
 
     // total tiles for all gemm
     int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
-
-    // this assign tiles to each block
-    int32_t entries_per_block = (total_tiles - 1 + block_count) / block_count;
-
 
     //
     // Determine dispatch composition of DP-tiles and SK-blocks
@@ -829,7 +834,26 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // float cohort_efficiency = float(dp_blocks) / float(cohort_blocks);
     std::cout << "sk regions: " << sk_regions << ", dp blocks: " << dp_blocks << ", dp tiles: " << dp_tiles << ", sk blocks: " << sk_blocks << ", sk tiles: " << sk_tiles << ", sk_waves: " << sk_waves << ", sk_iters_per_normal_block: " << sk_iters_per_normal_block << std::endl;
 
+    skInfo *sk_info_ptr = reinterpret_cast<skInfo*>(host_workspace_ptr);
+    auto sk_info = skInfo(
+         sk_regions,
+         dp_blocks,
+         dp_tiles,
+         sk_blocks,
+         sk_tiles,
+         sk_waves
+    );
+    *sk_info_ptr = sk_info;
 
+    //
+    // advance to problem info ptr
+    //
+    char *char_ptr = reinterpret_cast<char*>(host_workspace_ptr);
+    char_ptr += sizeof(skInfo);
+    ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(char_ptr);
+
+    // this assign tiles to each block
+    int32_t entries_per_block = (total_tiles - 1 + block_count) / block_count;
 
     int tile = 0;
     int start_tile = 0;
@@ -838,19 +862,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       Base::possibly_transpose_problem(problem);
       auto grid = Base::grid_shape(problem);
       int tiles = Base::tile_count(grid);
-
-      // TODO there're redundant storage for each problem
-      ProblemInfo problem_info(p_idx, start_tile,
-                            //
-                            sk_regions,
-                            dp_blocks,
-                            dp_tiles,
-                            sk_blocks,
-                            sk_tiles,
-                            sk_waves
-                            //
-      );
-
+      ProblemInfo problem_info(p_idx, start_tile);
       for (int i = 0; i < tiles; ++i, ++tile) {
 
         //
@@ -859,6 +871,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         // for problems 0, if it has 128 tiles (assume 128 sms), each sm takes one tile, 
         // so its tiles are distributed across sms
         //
+
+        // if (tile < sk_tiles) 
+        //   ;  // TODO
+        // else 
+        //   host_problem_info_ptr[(entries_per_block * (tile % block_count)) + (tile / block_count)] = problem_info;
+
         host_problem_info_ptr[(entries_per_block * (tile % block_count)) + (tile / block_count)] = problem_info;
       }
       start_tile += tiles;
