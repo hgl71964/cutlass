@@ -692,7 +692,7 @@ public:
   }
 
   CUTLASS_DEVICE
-  void sk_work(Params const &params, SharedStorage &shared_storage) {
+  void sk_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage) {
   }
  
   CUTLASS_DEVICE
@@ -870,7 +870,10 @@ public:
     while (problem_visitor.next_tile()) {
 
 
-      dp_work(problem_visitor, params, shared_storage);
+      if (problem_visitor.tile_idx < problem_visitor.dp_start_tile_idx)
+        sk_work(problem_visitor, params, shared_storage);
+      else 
+        dp_work(problem_visitor, params, shared_storage);
 
       // Next tile
       problem_visitor.advance(gridDim.x);

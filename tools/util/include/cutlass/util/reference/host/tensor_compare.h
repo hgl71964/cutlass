@@ -418,6 +418,83 @@ std::pair<bool, Coord<Layout::kRank> > TensorFind(
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+template <
+  typename Element,               ///< Element type
+  typename Layout>                ///< Layout function
+struct TensorEqualsWithCountFunc {
+
+  //
+  // Data members
+  //
+
+  TensorView<Element, Layout> lhs;
+  TensorView<Element, Layout> rhs;
+  int cnt;
+  std::vector<Coord<Layout::kRank> > coords{};
+
+  /// Ctor
+  TensorEqualsWithCountFunc() = delete;
+
+  /// Ctor
+  TensorEqualsWithCountFunc(
+    TensorView<Element, Layout> const &lhs_,
+    TensorView<Element, Layout> const &rhs_
+  ) :
+    lhs(lhs_), rhs(rhs_), cnt(0) { }
+
+  /// Visits a coordinate
+  void operator()(Coord<Layout::kRank> const &coord) {
+
+    Element lhs_ = lhs.at(coord);
+    Element rhs_ = rhs.at(coord);
+
+    if (lhs_ != rhs_) {
+      cnt++;
+      coords.push_back(coord);
+
+      // std::cout << " " << coord;
+    }
+  }
+};
+
+template <
+  typename Element,               ///< Element type
+  typename Layout>                ///< Layout function
+std::tuple<int, int, int, int, int> TensorEqualsWithCount(
+  TensorView<Element, Layout> const &lhs,
+  TensorView<Element, Layout> const &rhs) {
+
+  if (lhs.extent() != rhs.extent()) {
+    // Extents must be identical
+    assert(false);
+  }
+
+  TensorEqualsWithCountFunc<Element, Layout> func(lhs, rhs);
+  TensorForEach(
+    lhs.extent(),
+    func
+  );
+
+  // min, max wrong element
+  int min_x = INT_MAX;
+  int min_y = INT_MAX;
+
+  int max_x = INT_MIN;
+  int max_y = INT_MIN;
+  for (int i = 0; i < func.coords.size(); i++) {
+    auto coord = func.coords[i];
+    assert(coord.kRank==2);
+
+    min_x = std::min(coord.at(0), min_x);
+    min_y = std::min(coord.at(1), min_y);
+
+    max_x = std::max(coord.at(0), max_x);
+    max_y = std::max(coord.at(1), max_y);
+  }
+
+  return {min_x, min_y, max_x, max_y, func.cnt};
+}
+
 } // namespace host
 } // namespace reference
 } // namespace cutlass

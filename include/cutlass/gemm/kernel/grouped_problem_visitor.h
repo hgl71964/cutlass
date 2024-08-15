@@ -563,6 +563,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   ProblemInfo const *problem_info_ptr;
 
   //
+  //
+  //
+  int dp_start_tile_idx{0};
+
+
+  //
   // heuristic
   //
 
@@ -584,7 +590,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     Params const &params_,
     SharedStorage &shared_storage_,
     int32_t block_idx
-  ): Base(params_, block_idx),
+  ): Base(params_, block_idx/*tile_idx*/),
   tiles_computed(0),
   shared_storage(shared_storage_),
   problem_info_ptr(reinterpret_cast<ProblemInfo const*>(params_.workspace))
@@ -600,6 +606,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     if (block_idx == 0 && threadIdx.x == 0) {
       printf("[SK]: dp_start_block_idx: %d, dp_start_tile_idx: %d\n", dp_start_block_idx, dp_start_tile_idx);
     }
+    this->dp_start_tile_idx = dp_start_tile_idx;
 
     // 
     // group gemm

@@ -700,7 +700,7 @@ public:
   /// Verifies the result is a GEMM
   bool verify() {
 
-    bool passed = true;
+    bool all_pass = true;
 
     for (int32_t i = 0; i < problem_count(); ++i) {
       cutlass::gemm::GemmCoord problem = options.problem_sizes.at(i);
@@ -751,15 +751,26 @@ public:
       cutlass::TensorView<ElementC, LayoutC> view_Ref(matrix_Ref.data(), layout_D, extent_C);
 
       // Reference check
-      passed = cutlass::reference::host::TensorEquals(view_D, view_Ref);
+      bool passed = cutlass::reference::host::TensorEquals(view_D, view_Ref);
 
       if (!passed) {
         std::cerr << "\n***\nError - problem " << i << " failed the QA check\n***\n" << std::endl;
-        return passed;
+
+        auto [min_x, min_y, max_x, max_y, cnt] = cutlass::reference::host::TensorEqualsWithCount(view_D, view_Ref);
+
+        // x -> M (row); y -> N (col)
+        //
+        // this shows the extent of error; however the extent may not be squared!!! <- depends on ColumnMajor/RowMajor
+        //
+        std::cout << "Count: " << cnt << ", min_x: " << min_x << ", min block_x id: " << min_x / Gemm::BaseKernel::ThreadblockShape::kM << ", min_y: " << min_y << ", min block_y id: " << min_y / Gemm::BaseKernel::ThreadblockShape::kN << ", max_x: " << max_x << ", max block_x id: " << max_x / Gemm::BaseKernel::ThreadblockShape::kM << ", max_y: " << max_y << ", max block_y id: " << max_y / Gemm::BaseKernel::ThreadblockShape::kN << std::endl;
+
+        std::cout << std::endl;
       }
+
+      all_pass = all_pass && passed;
     }
 
-    return passed;
+    return all_pass;
   }
 
 };
