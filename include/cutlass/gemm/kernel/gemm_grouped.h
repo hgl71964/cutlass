@@ -870,12 +870,12 @@ public:
     while (problem_visitor.next_tile()) {
 
 
-      // if (problem_visitor.tile_idx < problem_visitor.dp_start_tile_idx)
-      //   sk_work(problem_visitor, params, shared_storage);
-      // else 
-      //   dp_work(problem_visitor, params, shared_storage);
+      if (problem_visitor.is_sk)
+        sk_work(problem_visitor, params, shared_storage);
+      else 
+        dp_work(problem_visitor, params, shared_storage);
 
-      dp_work(problem_visitor, params, shared_storage);
+      // dp_work(problem_visitor, params, shared_storage);
 
       // 
       problem_visitor.advance(gridDim.x);

@@ -1111,6 +1111,9 @@ int main(int argc, char const **args) {
   using LayoutA = cutlass::layout::ColumnMajor;
   using LayoutB = cutlass::layout::ColumnMajor;
   using LayoutC = cutlass::layout::ColumnMajor;
+  // using LayoutA = cutlass::layout::RowMajor;
+  // using LayoutB = cutlass::layout::RowMajor;
+  // using LayoutC = cutlass::layout::RowMajor;
 
   // Define a grouped GEMM kernel with all template parameters set except
   // for scheduling mode. This will be used as the template for all scheduling

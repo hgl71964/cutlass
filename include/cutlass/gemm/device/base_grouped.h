@@ -230,9 +230,29 @@ public:
                                                             args.problem_count,
                                                             args.threadblock_count);
     } else if (BaseKernel::ProblemVisitor::kRequiresPrecomputation==2) {
+
+      // gh512
+      int device_idx;
+      int sms;
+      cudaGetDevice(&device_idx);
+      cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, device_idx);
+
+      int sm_occupancy = -1;
+      int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
+      cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+        &sm_occupancy,
+        Kernel<BaseKernel>,
+        BaseKernel::kThreadCount,
+        smem_size,
+        cudaOccupancyDisableCachingOverride);
+      //
       return BaseKernel::ProblemVisitor::get_workspace_size_streamk(args.host_problem_sizes,
                                                                     args.problem_count,
-                                                                    args.threadblock_count);
+                                                                    args.threadblock_count,
+                                                                    sms,
+                                                                    sm_occupancy,
+                                                {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK}
+                                                                    );
 
     } else {
       return 0;
