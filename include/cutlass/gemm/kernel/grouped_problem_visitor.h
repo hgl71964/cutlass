@@ -533,6 +533,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_tiles;
     int sk_waves;
     int sk_iters_per_normal_block;
+    int iters_per_tile;
     int entries_per_block;  // dp entries per block
 
     CUTLASS_DEVICE
@@ -544,6 +545,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_tiles,
     int sk_waves,
     int sk_iters_per_normal_block,
+    int iters_per_tile,
     int entries_per_block
     ) : sk_regions(sk_regions)
         ,dp_blocks(dp_blocks)
@@ -552,6 +554,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,sk_tiles(sk_tiles)
         ,sk_waves(sk_waves)
         ,sk_iters_per_normal_block(sk_iters_per_normal_block)
+        ,iters_per_tile(iters_per_tile)
         ,entries_per_block(entries_per_block)
          {}
   };
@@ -580,6 +583,46 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   bool is_sk;
   int dp_start_tile_idx{0};
   int dp_start_block_idx{0};
+  int block_iter_begin, block_iter_end, block_iters_remaining;
+  int iters_per_tile;
+
+  // a runtime struct to hold sk-related info;
+  // XXX should we constraint sk only for the first GEMM?
+  struct TileWorkDesc
+  {
+    /// The linear tile index
+    int tile_idx;
+
+    /// The location of this tile (in threadblock-tile coordinates) in the output matrix
+    cutlass::gemm::GemmCoord tiled_coord;
+
+    // The first global-scoped MAC-iteration this threadblock will perform for this tile
+    int iter_begin;
+
+    // The starting index in the k-domain for MAC-iterations this threadblock will perform for this tile
+    int k_begin;
+
+    // The ending index (one-past) in the k-domain for MAC-iterations this threadblock will perform for this tile
+    int k_end;
+
+    /// The number of remaining MAC-iterations this threadblock will perform for this tile
+    int k_iters_remaining;
+
+    // Whether this block will perform the first iteration of this tile
+    CUTLASS_DEVICE
+    bool tile_started()
+    {
+      return (k_begin == 0);
+    }
+
+    // Whether this block will perform the last iteration of this tile
+    CUTLASS_DEVICE
+    bool tile_finished(Params const &params)
+    {
+      return (k_end == params.block_mapping.problem_size.k());
+    }
+  };
+  TileWorkDesc sk_tile_work;
 
 
   //
@@ -597,6 +640,86 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
 
   //
+  // sk-method
+  //
+  CUTLASS_DEVICE
+  void get_iter_extents(
+      int sk_block_idx,
+      int &sk_iters_per_normal_block,
+      int &block_iter_begin,
+      int &block_iter_end) const
+  {
+    int block_idx_in_region = sk_block_idx;
+    //int region_idx = 0;
+    int sk_big_blocks_per_region = 0;
+
+    // only one region
+    assert(region_idx == 0);
+    assert(block_idx_in_region==sk_block_idx);
+    //
+
+    // block_iter_begin = (region_idx * sk_iters_per_region) + (block_idx_in_region * sk_iters_per_normal_block);
+    block_iter_begin = block_idx_in_region * sk_iters_per_normal_block;
+
+    // Adjust extents for the first "num_big_blocks" blocks that get one extra iteration
+    int block_iters = sk_iters_per_normal_block;
+    if (block_idx_in_region < sk_big_blocks_per_region) {
+      // This is a +1 iteration block
+      block_iter_begin += block_idx_in_region;
+      block_iters++;
+    } else {
+      // This is a regular block
+      block_iter_begin += sk_big_blocks_per_region;
+    }
+    block_iter_end = block_iter_begin + block_iters;
+  }
+
+  CUTLASS_DEVICE
+  int get_sk_tile_idx(int iter, int iters_per_tile) const
+  {
+    // int tile_idx = div_mod_iters_per_tile.div(iter);
+    // return tile_idx;
+    return iter/iters_per_tile;
+  }
+
+  //CUTLASS_DEVICE
+  //void init_sk_tile_work(
+  //    TileWorkDesc &tile_work,
+  //    int tile_idx,
+  //    int block_iter_begin,
+  //    int block_iter_end)
+  //{
+  //  // The linear tile index
+  //  tile_work.tile_idx = tile_idx;
+
+  //  // The first global-scoped MAC-iteration for this tile
+  //  int tile_iter_begin = tile_idx * params.block_mapping.iters_per_tile();
+
+  //  // The first global-scoped MAC-iteration this threadblock will perform for this tile
+  //  tile_work.iter_begin = max(block_iter_begin, tile_iter_begin);
+
+  //  // The first tile-scoped MAC-iteration this threadblock will perform for this tile
+  //  int k_iter_begin = tile_work.iter_begin - tile_iter_begin;
+
+  //  // The last (one past) tile-scoped MAC-iteration this threadblock will perform for this tile
+  //  int k_iter_end = block_iter_end - tile_iter_begin;
+
+  //  // The number of MAC-iterations this threadblock will perform for this tile
+  //  tile_work.k_iters_remaining = k_iter_end - k_iter_begin;
+
+  //  // The starting index in the k-domain for MAC-iterations this threadblock will perform for this tile
+  //  tile_work.k_begin = k_iter_begin * Mma::Shape::kK;
+
+  //  // The ending index (one-past) in the k-domain for MAC-iterations this threadblock will perform for this tile
+  //  tile_work.k_end = min(
+  //      params.block_mapping.problem_size.k(),            // extent of k domain
+  //      (k_iter_end * Mma::Shape::kK));                   // extent of the threadblock's global iteration assignment
+
+  //  // The location of this tile (in threadblock-tile coordinates) in the output matrix
+  //  tile_work.tiled_coord = params.block_mapping.get_tile_offset(tile_work.tile_idx);
+  //}
+
+  //
   // Methods
   //
   CUTLASS_DEVICE
@@ -611,7 +734,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   problem_info_ptr(nullptr)
   {
     //
-    // sk related
+    // sk related (can we move this to static schedule? and just prefetch?)
     //
     skInfo const *sk_info_ptr = reinterpret_cast<skInfo const*>(params_.workspace);
     skInfo sk_info = *sk_info_ptr;
@@ -628,6 +751,21 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       is_sk = true;
     else
       is_sk = false;
+
+    // init sk global-scope block extent
+    int block_iter_begin, block_iter_end, block_iters_remaining;
+    get_iter_extents(
+      block_idx,
+      sk_info.sk_iters_per_normal_block,
+      block_iter_begin,
+      block_iter_end);
+    block_iters_remaining = block_iter_end - block_iter_begin;
+    this->block_iter_begin = block_iter_begin;
+    this->block_iter_end = block_iter_end;
+    this->block_iters_remaining = block_iters_remaining;
+    this->iters_per_tile = sk_info.iters_per_tile;
+
+    this->sk_tile_work = TileWorkDesc{};
 
     // 
     // dp related
@@ -876,6 +1014,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          sk_tiles,
          sk_waves,
          sk_iters_per_normal_block,
+         iters_per_tile,
          entries_per_block
     );
     if (verbose)
