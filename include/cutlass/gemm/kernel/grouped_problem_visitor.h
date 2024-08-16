@@ -600,7 +600,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     auto p = *sk_info_ptr;
 
     int dp_start_block_idx = p.sk_blocks * p.sk_waves;
-    // in group gemm, tile_idx is all that matters?
     int dp_start_tile_idx = p.sk_tiles;
 
     if (block_idx == 0 && threadIdx.x == 0) {
@@ -608,7 +607,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     }
     this->dp_start_tile_idx = dp_start_tile_idx;
     this->dp_start_block_idx = dp_start_block_idx;
-    if (dp_start_block_idx>0)
+    if (dp_start_block_idx > 0)
       is_sk = true;
 
     // 
@@ -676,24 +675,13 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                               int32_t block_count,
                               void* host_workspace_ptr) { assert(false);}
 
-  static size_t get_workspace_size_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
-                                   int32_t problem_count,
-                                   int32_t block_count) {
-    int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
-    int32_t entries_per_block = ((total_tiles - 1 + block_count) / block_count);
-    return sizeof(skInfo) + sizeof(ProblemInfo) * entries_per_block * block_count;
-  }
-  static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
+  static skInfo plan_sk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
                               int32_t problem_count,
-                              int32_t block_count,
-                              //
                               int num_sms,
                               int sm_occupancy,
                               GemmCoord thread_block_shape,
-                              //
-                              void* host_workspace_ptr) {
-    std::cout << "[Precompute] " << std::endl;
-
+                              bool verbose
+                              ) {
     // total tiles for all gemm
     int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
 
@@ -704,7 +692,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int iters_per_tile = (first_problem.k() + thread_block_shape.k() - 1) / thread_block_shape.k();
     int waves = (total_tiles + num_sms - 1) / num_sms;
     float dp_efficiency = float(total_tiles) / float(waves * num_sms);
-    std::cout << "total_tiles: " << total_tiles << ", iters_per_tile: " << iters_per_tile << ", waves: " << waves << ", dp_efficiency: " << dp_efficiency << std::endl;
+
+    if (verbose)
+      std::cout << "total_tiles: " << total_tiles << ", iters_per_tile: " << iters_per_tile << ", waves: " << waves << ", dp_efficiency: " << dp_efficiency << std::endl;
 
     // Start with a DP-only configuration
     int dp_tiles = total_tiles;     // Number of data-parallel tiles
@@ -743,7 +733,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int min_sk_blocks = fast_min(num_sms, sk_tiles + 1);
     int max_sk_blocks = fast_min(num_sms * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
 
-    std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
+    if (verbose)
+      std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
 
     // Number of thread blocks to produce the remaining SK tiles
     int sk_blocks = 0;              
@@ -792,7 +783,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // post-process sk region
     //
     int sk_regions = 1;
-    int sk_iters_per_normal_block;
+    //int sk_iters_per_normal_block;
     // int reduction_blocks = 0;
     // bool remap_block_indices = false;
     int sk_waves = -1;
@@ -801,7 +792,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       sk_waves = (sk_blocks + num_sms - 1) / num_sms;
       int sk_iters = sk_tiles * iters_per_tile;
       sk_blocks = fast_min(sk_blocks, sk_iters);
-      sk_iters_per_normal_block = sk_iters / sk_blocks;
+      //sk_iters_per_normal_block = sk_iters / sk_blocks;
       // int extra_sk_iters = sk_iters - (sk_iters_per_normal_block * sk_blocks);
       // int sk_big_blocks = extra_sk_iters;
       if ((sk_blocks > sk_tiles) && (sk_blocks % sk_tiles == 0)) {
@@ -832,9 +823,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //     tiled_shape.k());
     // int cohort_blocks = (tiled_cohort_shape.m() * tiled_cohort_shape.n()) * kCtasPerCohort;
     // float cohort_efficiency = float(dp_blocks) / float(cohort_blocks);
-    std::cout << "sk regions: " << sk_regions << ", dp blocks: " << dp_blocks << ", dp tiles: " << dp_tiles << ", sk blocks: " << sk_blocks << ", sk tiles: " << sk_tiles << ", sk_waves: " << sk_waves << ", sk_iters_per_normal_block: " << sk_iters_per_normal_block << std::endl;
 
-    skInfo *sk_info_ptr = reinterpret_cast<skInfo*>(host_workspace_ptr);
+
+    //
     auto sk_info = skInfo(
          sk_regions,
          dp_blocks,
@@ -843,6 +834,39 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          sk_tiles,
          sk_waves
     );
+    if (verbose)
+      std::cout << "sk regions: " << sk_info.sk_regions << ", dp blocks: " << sk_info.dp_blocks << ", dp tiles: " << sk_info.dp_tiles << ", sk blocks: " << sk_info.sk_blocks << ", sk tiles: " << sk_info.sk_tiles << ", sk_waves: " << sk_info.sk_waves <<  std::endl;
+    return sk_info;
+  }
+
+  static size_t get_workspace_size_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
+                                   int32_t problem_count,
+                                   int32_t block_count) {
+    int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
+    int32_t entries_per_block = ((total_tiles - 1 + block_count) / block_count);
+    return sizeof(skInfo) + sizeof(ProblemInfo) * entries_per_block * block_count;
+  }
+  static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
+                              int32_t problem_count,
+                              int32_t block_count,
+                              //
+                              int num_sms,
+                              int sm_occupancy,
+                              GemmCoord thread_block_shape,
+                              //
+                              void* host_workspace_ptr) {
+    std::cout << "[Precompute] " << std::endl;
+    auto sk_info = plan_sk(host_problem_sizes_ptr, 
+                      problem_count,
+                      num_sms,
+                      sm_occupancy,
+                      thread_block_shape,
+                      true);
+
+    //
+    // save to work space
+    //
+    skInfo *sk_info_ptr = reinterpret_cast<skInfo*>(host_workspace_ptr);
     *sk_info_ptr = sk_info;
 
     //
@@ -852,8 +876,13 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     char_ptr += sizeof(skInfo);
     ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(char_ptr);
 
-    // this assign tiles to each block
+    // 
+    // based on sk info, plan the rest dp blocks  
+    //
+    int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
     int32_t entries_per_block = (total_tiles - 1 + block_count) / block_count;
+    // assert(sk_info.dp_tiles % block_count == 0);  // <- perfect quantization!!!
+    // int32_t entries_per_block = sk_info.dp_tiles/block_count;
 
     int tile = 0;
     int start_tile = 0;
@@ -872,10 +901,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         // so its tiles are distributed across sms
         //
 
-        // if (tile < sk_tiles) 
-        //   ;  // TODO
-        // else 
-        //   host_problem_info_ptr[(entries_per_block * (tile % block_count)) + (tile / block_count)] = problem_info;
+        //if (tile < sk_info.sk_tiles) {
+        //  ; // todo sk 
+        //} else {
+        //  int dp_tile = tile - sk_info.sk_tiles;
+        //  host_problem_info_ptr[(entries_per_block * (dp_tile % block_count)) + (dp_tile / block_count)] = problem_info;
+        //}
 
         host_problem_info_ptr[(entries_per_block * (tile % block_count)) + (tile / block_count)] = problem_info;
       }
