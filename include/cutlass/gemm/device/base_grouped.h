@@ -177,6 +177,7 @@ private:
                                                 // gh512
                                                 sms,
                                                 sm_occupancy,
+                                                BaseKernel::Mma::Shape::kK,
                                                 {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
                                                 //
 
@@ -251,6 +252,7 @@ public:
                                                                     args.threadblock_count,
                                                                     sms,
                                                                     sm_occupancy,
+                                                BaseKernel::Mma::Shape::kK,
                                                 {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK}
                                                                     );
 

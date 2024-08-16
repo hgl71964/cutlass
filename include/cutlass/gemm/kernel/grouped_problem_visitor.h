@@ -191,6 +191,7 @@ struct BaseGroupedProblemVisitor {
                                    //
                                   int num_sms,
                                   int sm_occupancy,
+                                  int mma_shape_k,
                                   GemmCoord thread_block_shape
                                   ) 
                                   {return 0;}
@@ -200,6 +201,7 @@ struct BaseGroupedProblemVisitor {
                               //
                               int num_sms,
                               int sm_occupancy,
+                                  int mma_shape_k,
                               GemmCoord thread_block_shape,
                               //
                               void* host_workspace_ptr) {}
@@ -534,6 +536,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_waves;
     int sk_iters_per_normal_block;
     int iters_per_tile;
+    int problem_size_k;
+    int mma_shape_k;
     int entries_per_block;  // dp entries per block
 
     CUTLASS_DEVICE
@@ -546,6 +550,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_waves,
     int sk_iters_per_normal_block,
     int iters_per_tile,
+    int problem_size_k,
+    int mma_shape_k,
     int entries_per_block
     ) : sk_regions(sk_regions)
         ,dp_blocks(dp_blocks)
@@ -555,6 +561,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,sk_waves(sk_waves)
         ,sk_iters_per_normal_block(sk_iters_per_normal_block)
         ,iters_per_tile(iters_per_tile)
+        ,problem_size_k(problem_size_k)
+        ,mma_shape_k(mma_shape_k)
         ,entries_per_block(entries_per_block)
          {}
   };
@@ -585,6 +593,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   int dp_start_block_idx{0};
   int block_iter_begin, block_iter_end, block_iters_remaining;
   int iters_per_tile;
+  int problem_size_k;
+  int mma_shape_k;
 
   // a runtime struct to hold sk-related info;
   // XXX should we constraint sk only for the first GEMM?
@@ -682,42 +692,85 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     return iter/iters_per_tile;
   }
 
-  //CUTLASS_DEVICE
-  //void init_sk_tile_work(
-  //    TileWorkDesc &tile_work,
-  //    int tile_idx,
-  //    int block_iter_begin,
-  //    int block_iter_end)
-  //{
-  //  // The linear tile index
-  //  tile_work.tile_idx = tile_idx;
+  CUTLASS_DEVICE
+  GemmCoord get_tile_offset(int tile_idx) const
+  {
+    // todo
 
-  //  // The first global-scoped MAC-iteration for this tile
-  //  int tile_iter_begin = tile_idx * params.block_mapping.iters_per_tile();
+    //int m, n;
 
-  //  // The first global-scoped MAC-iteration this threadblock will perform for this tile
-  //  tile_work.iter_begin = max(block_iter_begin, tile_iter_begin);
+    //// row-major raster
+    //div_mod_tiled_shape_n(m, n, tile_idx);
 
-  //  // The first tile-scoped MAC-iteration this threadblock will perform for this tile
-  //  int k_iter_begin = tile_work.iter_begin - tile_iter_begin;
+    //if (tiled_shape().m() < tiled_shape().n())
+    //{
+    //  // column-major raster
+    //  div_mod_tiled_shape_m(n, m, tile_idx);
+    //}
 
-  //  // The last (one past) tile-scoped MAC-iteration this threadblock will perform for this tile
-  //  int k_iter_end = block_iter_end - tile_iter_begin;
+    //if (cohort_raster)
+    //{
+    //  // tiled cohort raster
+    //  int cohort_tile_idx = tile_idx / kCtasPerCohort;
+    //  int cohort_grid_m, cohort_grid_n;
+    //  div_mod_tiled_cohort_shape_n(cohort_grid_m, cohort_grid_n, cohort_tile_idx);
 
-  //  // The number of MAC-iterations this threadblock will perform for this tile
-  //  tile_work.k_iters_remaining = k_iter_end - k_iter_begin;
+    //  int block_idx_cohort = tile_idx % kCtasPerCohort;
+    //  int block_cohort_m = block_idx_cohort / kCohortCtasN;
+    //  int block_cohort_n = block_idx_cohort % kCohortCtasN;
 
-  //  // The starting index in the k-domain for MAC-iterations this threadblock will perform for this tile
-  //  tile_work.k_begin = k_iter_begin * Mma::Shape::kK;
+    //  m = (cohort_grid_m * kCohortCtasM) + block_cohort_m;
+    //  n = (cohort_grid_n * kCohortCtasN) + block_cohort_n;
+    //}
 
-  //  // The ending index (one-past) in the k-domain for MAC-iterations this threadblock will perform for this tile
-  //  tile_work.k_end = min(
-  //      params.block_mapping.problem_size.k(),            // extent of k domain
-  //      (k_iter_end * Mma::Shape::kK));                   // extent of the threadblock's global iteration assignment
+    //return GemmCoord(m, n, get_batch_idx());
 
-  //  // The location of this tile (in threadblock-tile coordinates) in the output matrix
-  //  tile_work.tiled_coord = params.block_mapping.get_tile_offset(tile_work.tile_idx);
-  //}
+    return GemmCoord(0, 0, 0);
+  }
+
+  CUTLASS_DEVICE
+  void init_sk_tile_work(
+      TileWorkDesc &tile_work,
+      int tile_idx,
+      int block_iter_begin,
+      int block_iter_end)
+  {
+    // The linear tile index
+    tile_work.tile_idx = tile_idx;
+
+    // The first global-scoped MAC-iteration for this tile
+    // int tile_iter_begin = tile_idx * params.block_mapping.iters_per_tile();
+    int tile_iter_begin = tile_idx * this->iters_per_tile;
+
+    // The first global-scoped MAC-iteration this threadblock will perform for this tile
+    tile_work.iter_begin = max(block_iter_begin, tile_iter_begin);
+
+    // The first tile-scoped MAC-iteration this threadblock will perform for this tile
+    int k_iter_begin = tile_work.iter_begin - tile_iter_begin;
+
+    // The last (one past) tile-scoped MAC-iteration this threadblock will perform for this tile
+    int k_iter_end = block_iter_end - tile_iter_begin;
+
+    // The number of MAC-iterations this threadblock will perform for this tile
+    tile_work.k_iters_remaining = k_iter_end - k_iter_begin;
+
+    // The starting index in the k-domain for MAC-iterations this threadblock will perform for this tile
+    //tile_work.k_begin = k_iter_begin * Mma::Shape::kK;
+    tile_work.k_begin = k_iter_begin * this->mma_shape_k;
+
+    // The ending index (one-past) in the k-domain for MAC-iterations this threadblock will perform for this tile
+    //tile_work.k_end = min(
+    //    params.block_mapping.problem_size.k(),            // extent of k domain
+    //    (k_iter_end * Mma::Shape::kK));                   // extent of the threadblock's global iteration assignment
+    tile_work.k_end = min(
+        this->problem_size_k,            // extent of k domain
+        (k_iter_end * this->mma_shape_k)
+    );
+
+    // The location of this tile (in threadblock-tile coordinates) in the output matrix
+    //tile_work.tiled_coord = params.block_mapping.get_tile_offset(tile_work.tile_idx);
+    tile_work.tiled_coord = get_tile_offset(tile_work.tile_idx);
+  }
 
   //
   // Methods
@@ -763,7 +816,10 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->block_iter_begin = block_iter_begin;
     this->block_iter_end = block_iter_end;
     this->block_iters_remaining = block_iters_remaining;
+
     this->iters_per_tile = sk_info.iters_per_tile;
+    this->problem_size_k = sk_info.problem_size_k;
+    this->mma_shape_k = sk_info.mma_shape_k;
 
     this->sk_tile_work = TileWorkDesc{};
 
@@ -853,6 +909,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                               int sm_occupancy,
                               GemmCoord thread_block_shape,
                               int32_t block_count,
+                              int mma_shape_k,
                               bool verbose
                               ) {
     // total tiles for all gemm
@@ -1015,6 +1072,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          sk_waves,
          sk_iters_per_normal_block,
          iters_per_tile,
+         first_problem.k(),  // all problem size k must be the same for MoE 
+         mma_shape_k,
          entries_per_block
     );
     if (verbose)
@@ -1028,6 +1087,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                                    //
                                   int num_sms,
                                   int sm_occupancy,
+                                  int mma_shape_k,
                                   GemmCoord thread_block_shape
                                   //
                                    ) {
@@ -1038,6 +1098,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                       sm_occupancy,
                       thread_block_shape,
                       block_count,
+                      mma_shape_k,
                       false);
 
     // int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
@@ -1052,6 +1113,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                               //
                               int num_sms,
                               int sm_occupancy,
+                              int mma_shape_k,
                               GemmCoord thread_block_shape,
                               //
                               void* host_workspace_ptr) {
@@ -1062,6 +1124,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                       sm_occupancy,
                       thread_block_shape,
                       block_count,
+                      mma_shape_k,
                       true);
 
     //
