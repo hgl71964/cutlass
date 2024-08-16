@@ -532,6 +532,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_blocks;
     int sk_tiles;
     int sk_waves;
+    int sk_iters_per_normal_block;
     int entries_per_block;  // dp entries per block
 
     CUTLASS_DEVICE
@@ -542,6 +543,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_blocks,
     int sk_tiles,
     int sk_waves,
+    int sk_iters_per_normal_block,
     int entries_per_block
     ) : sk_regions(sk_regions)
         ,dp_blocks(dp_blocks)
@@ -549,6 +551,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,sk_blocks(sk_blocks)
         ,sk_tiles(sk_tiles)
         ,sk_waves(sk_waves)
+        ,sk_iters_per_normal_block(sk_iters_per_normal_block)
         ,entries_per_block(entries_per_block)
          {}
   };
@@ -815,7 +818,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // post-process sk region
     //
     int sk_regions = 1;
-    //int sk_iters_per_normal_block;
+    int sk_iters_per_normal_block;
     // int reduction_blocks = 0;
     // bool remap_block_indices = false;
     int sk_waves = -1;
@@ -824,9 +827,13 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       sk_waves = (sk_blocks + num_sms - 1) / num_sms;
       int sk_iters = sk_tiles * iters_per_tile;
       sk_blocks = fast_min(sk_blocks, sk_iters);
-      //sk_iters_per_normal_block = sk_iters / sk_blocks;
-      // int extra_sk_iters = sk_iters - (sk_iters_per_normal_block * sk_blocks);
-      // int sk_big_blocks = extra_sk_iters;
+      sk_iters_per_normal_block = sk_iters / sk_blocks;
+      int extra_sk_iters = sk_iters - (sk_iters_per_normal_block * sk_blocks);
+      int sk_big_blocks = extra_sk_iters;
+      if (sk_big_blocks>0) {
+        assert(false && "a problem with sk big blocks");
+      }
+
       if ((sk_blocks > sk_tiles) && (sk_blocks % sk_tiles == 0)) {
         // // Split-K decomposition
         // sk_regions = sk_tiles;
@@ -868,6 +875,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          sk_blocks,
          sk_tiles,
          sk_waves,
+         sk_iters_per_normal_block,
          entries_per_block
     );
     if (verbose)

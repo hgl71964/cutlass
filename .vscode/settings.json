@@ -84,6 +84,7 @@
         "stack": "cpp",
         "__locale": "cpp",
         "__string": "cpp",
-        "__config": "cpp"
+        "__config": "cpp",
+        "target": "cpp"
     }
 }
