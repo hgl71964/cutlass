@@ -607,6 +607,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   int iters_per_tile;
   int problem_size_k;
   int mma_shape_k;
+  int sk_tile_idx;
 
   // a runtime struct to hold sk-related info;
   // XXX should we constraint sk only for the first GEMM?
@@ -701,6 +702,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   {
     // int tile_idx = div_mod_iters_per_tile.div(iter);
     // return tile_idx;
+
+    // TODO use div_mod_iters_per_tile
     return iter/iters_per_tile;
   }
 
@@ -813,10 +816,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       // sanity check
       // if (block_idx == 0 && threadIdx.x == 0) {
       //   for (int i = 0; i < sk_info.sk_tiles; i++) {
-      //     printf("[SK] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n, this->tile_idx_offset_ptr[i].problem_idx);
+      //     printf("[Check-SK-Schedule] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n, this->tile_idx_offset_ptr[i].problem_idx);
       //   }
       // }
     }
+    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->iters_per_tile);  
     
 
     // 
@@ -851,8 +855,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   CUTLASS_DEVICE
   bool next_tile() {
     if (this->is_sk) {
+      // NOTE: advance() will turn off sk flag
 
-      // advance() will turn off sk flag
+      init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
 
       return true;
     }
@@ -1156,8 +1161,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
             break;
 
           // row major
-          int m = tile_idx/grid_shape_n;
-          int n = tile_idx%grid_shape_n;
+          int m = i/grid_shape_n;
+          int n = i%grid_shape_n;
 
           TileIdxOffset tile_idx_offset;
           tile_idx_offset.problem_idx = p_idx;
