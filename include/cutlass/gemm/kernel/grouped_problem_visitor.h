@@ -538,6 +538,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int iters_per_tile;
     int problem_size_k;
     int mma_shape_k;
+    GemmCoord thread_block_shape;
+    // std::unordered_map<int, std::tuple<int, int, int>> tile_idx_to_offset{};
     int entries_per_block;  // dp entries per block
 
     CUTLASS_DEVICE
@@ -552,6 +554,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int iters_per_tile,
     int problem_size_k,
     int mma_shape_k,
+    GemmCoord thread_block_shape,
     int entries_per_block
     ) : sk_regions(sk_regions)
         ,dp_blocks(dp_blocks)
@@ -563,8 +566,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,iters_per_tile(iters_per_tile)
         ,problem_size_k(problem_size_k)
         ,mma_shape_k(mma_shape_k)
+        ,thread_block_shape(thread_block_shape)
         ,entries_per_block(entries_per_block)
          {}
+  };
+
+  struct TileIdxOffset {
+    int problem_idx;
+    int m; // row
+    int n; // col
   };
 
   struct SharedStorage {
@@ -588,6 +598,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   //
   // sk params
   //
+  TileIdxOffset const *tile_idx_offset_ptr;
+
   bool is_sk;
   int dp_start_tile_idx{0};
   int dp_start_block_idx{0};
@@ -693,42 +705,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   }
 
   CUTLASS_DEVICE
-  GemmCoord get_tile_offset(int tile_idx) const
-  {
-    // todo
-
-    //int m, n;
-
-    //// row-major raster
-    //div_mod_tiled_shape_n(m, n, tile_idx);
-
-    //if (tiled_shape().m() < tiled_shape().n())
-    //{
-    //  // column-major raster
-    //  div_mod_tiled_shape_m(n, m, tile_idx);
-    //}
-
-    //if (cohort_raster)
-    //{
-    //  // tiled cohort raster
-    //  int cohort_tile_idx = tile_idx / kCtasPerCohort;
-    //  int cohort_grid_m, cohort_grid_n;
-    //  div_mod_tiled_cohort_shape_n(cohort_grid_m, cohort_grid_n, cohort_tile_idx);
-
-    //  int block_idx_cohort = tile_idx % kCtasPerCohort;
-    //  int block_cohort_m = block_idx_cohort / kCohortCtasN;
-    //  int block_cohort_n = block_idx_cohort % kCohortCtasN;
-
-    //  m = (cohort_grid_m * kCohortCtasM) + block_cohort_m;
-    //  n = (cohort_grid_n * kCohortCtasN) + block_cohort_n;
-    //}
-
-    //return GemmCoord(m, n, get_batch_idx());
-
-    return GemmCoord(0, 0, 0);
-  }
-
-  CUTLASS_DEVICE
   void init_sk_tile_work(
       TileWorkDesc &tile_work,
       int tile_idx,
@@ -769,7 +745,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // The location of this tile (in threadblock-tile coordinates) in the output matrix
     //tile_work.tiled_coord = params.block_mapping.get_tile_offset(tile_work.tile_idx);
-    tile_work.tiled_coord = get_tile_offset(tile_work.tile_idx);
+    int m = this->tile_idx_offset_ptr[tile_idx].m;
+    int n = this->tile_idx_offset_ptr[tile_idx].n;
+    int problem_idx = this->tile_idx_offset_ptr[tile_idx].problem_idx;
+    assert(problem_idx==0);  // assume sk all in first problems for now
+    tile_work.tiled_coord = cutlass::gemm::GemmCoord(m, n, 0);
   }
 
   //
@@ -784,6 +764,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   tiles_computed(0),
   shared_storage(shared_storage_),
   //problem_info_ptr(reinterpret_cast<ProblemInfo const*>(params_.workspace)),
+  tile_idx_offset_ptr(nullptr),
   problem_info_ptr(nullptr)
   {
     //
@@ -823,6 +804,21 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     this->sk_tile_work = TileWorkDesc{};
 
+    // tile offset ptr
+    {
+      char const* char_ptr = reinterpret_cast<char const*>(params_.workspace);
+      char_ptr += sizeof(skInfo);
+      this->tile_idx_offset_ptr = reinterpret_cast<TileIdxOffset const*>(char_ptr);
+
+      // sanity check
+      // if (block_idx == 0 && threadIdx.x == 0) {
+      //   for (int i = 0; i < sk_info.sk_tiles; i++) {
+      //     printf("[SK] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n, this->tile_idx_offset_ptr[i].problem_idx);
+      //   }
+      // }
+    }
+    
+
     // 
     // dp related
     //
@@ -834,9 +830,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->block_load_start = sk_info.entries_per_block * block_idx;
 
     // advance to problem info ptr
-    char const* char_ptr = reinterpret_cast<char const*>(params_.workspace);
-    char_ptr += sizeof(skInfo);
-    this->problem_info_ptr = reinterpret_cast<ProblemInfo const*>(char_ptr);
+    {
+      char const* char_ptr = reinterpret_cast<char const*>(params_.workspace);
+      char_ptr += sizeof(skInfo) + sizeof(TileIdxOffset) * sk_info.sk_tiles;
+      this->problem_info_ptr = reinterpret_cast<ProblemInfo const*>(char_ptr);
+    }
 
 
     if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
@@ -1062,7 +1060,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     assert(dp_tiles % block_count == 0);  // <- perfect quantization!!!
     int entries_per_block = dp_tiles/block_count;
 
-    //
     skInfo sk_info = skInfo(
          sk_regions,
          dp_blocks,
@@ -1074,6 +1071,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          iters_per_tile,
          first_problem.k(),  // all problem size k must be the same for MoE 
          mma_shape_k,
+         thread_block_shape,
          entries_per_block
     );
     if (verbose)
@@ -1104,8 +1102,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
     // int32_t entries_per_block = ((total_tiles - 1 + block_count) / block_count);
     int32_t entries_per_block = static_cast<int32_t>(sk_info.entries_per_block);
+    int sk_tiles = sk_info.sk_tiles;
 
-    return sizeof(skInfo) + sizeof(ProblemInfo) * entries_per_block * block_count;
+    return sizeof(skInfo) + sizeof(TileIdxOffset) * sk_tiles + sizeof(ProblemInfo) * entries_per_block * block_count;
   }
   static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
                               int32_t problem_count,
@@ -1128,16 +1127,57 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                       true);
 
     //
-    // save to work space
+    // save sk_info to work space
     //
     skInfo *sk_info_ptr = reinterpret_cast<skInfo*>(host_workspace_ptr);
     *sk_info_ptr = sk_info;
 
     //
+    // deal with tile offset
+    //
+    {
+      char *char_ptr = reinterpret_cast<char*>(host_workspace_ptr);
+      char_ptr += sizeof(skInfo);
+      TileIdxOffset* host_tile_off_ptr = reinterpret_cast<TileIdxOffset*>(char_ptr);
+
+      int sk_tiles = sk_info.sk_tiles;
+      int tile_idx = 0;
+      int start_tile = 0;
+      for (int p_idx = 0; p_idx < problem_count; ++p_idx) {
+        auto problem = host_problem_sizes_ptr[p_idx];
+        Base::possibly_transpose_problem(problem);
+        auto grid = Base::grid_shape(problem);
+        int tiles = Base::tile_count(grid);
+        int grid_shape_n = grid.n();
+
+        for (int i = 0; i < tiles; ++i, ++tile_idx) {
+
+          if (tile_idx >= sk_tiles)
+            break;
+
+          // row major
+          int m = tile_idx/grid_shape_n;
+          int n = tile_idx%grid_shape_n;
+
+          TileIdxOffset tile_idx_offset;
+          tile_idx_offset.problem_idx = p_idx;
+          tile_idx_offset.m = m;
+          tile_idx_offset.n = n;
+          host_tile_off_ptr[tile_idx] = tile_idx_offset;
+        }
+        start_tile += tiles;
+
+        if (tile_idx >= sk_tiles)
+          break;
+      }
+    }
+
+
+    //
     // advance to problem info ptr
     //
     char *char_ptr = reinterpret_cast<char*>(host_workspace_ptr);
-    char_ptr += sizeof(skInfo);
+    char_ptr += sizeof(skInfo) + sizeof(TileIdxOffset) * sk_info.sk_tiles;
     ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(char_ptr);
 
     // 
