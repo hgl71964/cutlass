@@ -105,7 +105,7 @@ struct GemmGroupedProblemVisitor : public GroupedProblemVisitor<
   //
   CUTLASS_DEVICE
   GemmGroupedProblemVisitor(
-    Params const &params_,
+    Params &params_,
     SharedStorage &shared_storage_, 
     int32_t block_idx
   ): Base (params_, shared_storage_, block_idx)

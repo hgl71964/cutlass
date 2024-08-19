@@ -303,7 +303,7 @@ public:
  
   /// Executes one GEMM
   CUTLASS_DEVICE
-  void operator()(Params const &params, SharedStorage &shared_storage) {
+  void operator()(Params &params, SharedStorage &shared_storage) {
 
     //
     // These types shadow the type-level definitions and support the ability to implement
@@ -940,27 +940,26 @@ public:
 
       // // Non "finishing" SK blocks must share their partial accumulator sums through global scratch workspace
       // share_accumulators(accumulator_tile, block_idx, first_block_idx);
-      // share_accumulators(accumulator_tile, problem_visitor, blockIdx.x, first_block_idx);
-      ;
+      share_accumulators(accumulator_tile, problem_visitor, blockIdx.x, first_block_idx);
 
     }
     else
     {
       // DP blocks and "finishing" SK blocks must perform epilogue operations and write the output tile
 
-      // if (!tile_work.tile_started())
-      // {
-      //   // A "finishing" SK block must first aggregate its accumulator partial sums with those shared by peer threadblocks
-      //   // acquire_accumulators(accumulator_tile, block_idx, first_block_idx);
-      //   acquire_accumulators(accumulator_tile, problem_visitor, blockIdx.x, first_block_idx);
-      // }
+      if (!tile_work.tile_started())
+      {
+        // A "finishing" SK block must first aggregate its accumulator partial sums with those shared by peer threadblocks
+        // acquire_accumulators(accumulator_tile, block_idx, first_block_idx);
+        acquire_accumulators(accumulator_tile, problem_visitor, blockIdx.x, first_block_idx);
+      }
 
-      // do_epilogue(problem_visitor, 
-      // params, 
-      // shared_storage, 
-      // warp_idx, 
-      // lane_idx, 
-      // accumulator_tile);
+      do_epilogue(problem_visitor, 
+      params, 
+      shared_storage, 
+      warp_idx, 
+      lane_idx, 
+      accumulator_tile);
 
       ;
     }
@@ -1112,7 +1111,7 @@ public:
 
   /// Executes one GEMM
   CUTLASS_DEVICE
-  void operator()(Params const &params, SharedStorage &shared_storage) {
+  void operator()(Params &params, SharedStorage &shared_storage) {
 
     //
     // These types shadow the type-level definitions and support the ability to implement
