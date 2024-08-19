@@ -763,6 +763,33 @@ public:
     // Cooperative SK peer reduction
     //
     //int first_block_idx = params.block_mapping.get_first_block_idx(tile_work.tile_idx);
+    int first_block_idx = problem_visitor.get_first_block_idx(tile_work.tile_idx);
+    // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) {
+    //   printf("[DEBUG-SK] BID: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, first_block_idx: %d\n", blockIdx.x, problem_visitor.block_iter_begin, problem_visitor.block_iter_end, problem_visitor.block_iters_remaining, first_block_idx);
+    // }
+
+
+    if (!tile_work.tile_finished(problem_visitor.sk_runtime_ptr->problem_size_k)) {
+
+      // // Non "finishing" SK blocks must share their partial accumulator sums through global scratch workspace
+      // share_accumulators(accumulator_tile, block_idx, first_block_idx);
+      ;
+
+    }
+    else
+    {
+      // DP blocks and "finishing" SK blocks must perform epilogue operations and write the output tile
+
+      //if (!tile_work.tile_started())
+      //{
+      //  // A "finishing" SK block must first aggregate its accumulator partial sums with those shared by peer threadblocks
+      //  acquire_accumulators(accumulator_tile, block_idx, first_block_idx);
+      //}
+
+      //do_epilogue(tile_work, accumulator_tile);
+      ;
+    }
+
   }
 
  

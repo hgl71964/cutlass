@@ -539,6 +539,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int problem_size_k;
     int mma_shape_k;
     GemmCoord thread_block_shape;
+
+    FastDivmod div_mod_sk_iters_per_normal_block;
+    FastDivmod div_mod_sk_iters_per_big_block;
+    FastDivmod div_mod_sk_iters_per_region;
+
     // std::unordered_map<int, std::tuple<int, int, int>> tile_idx_to_offset{};
     int entries_per_block;  // dp entries per block
 
@@ -555,6 +560,13 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int problem_size_k,
     int mma_shape_k,
     GemmCoord thread_block_shape,
+
+    //
+    FastDivmod div_mod_sk_iters_per_normal_block,
+    FastDivmod div_mod_sk_iters_per_big_block,
+    FastDivmod div_mod_sk_iters_per_region,
+    //
+
     int entries_per_block
     ) : sk_regions(sk_regions)
         ,dp_blocks(dp_blocks)
@@ -567,6 +579,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,problem_size_k(problem_size_k)
         ,mma_shape_k(mma_shape_k)
         ,thread_block_shape(thread_block_shape)
+        ,div_mod_sk_iters_per_normal_block(div_mod_sk_iters_per_normal_block)
+        ,div_mod_sk_iters_per_big_block(div_mod_sk_iters_per_big_block)
+        ,div_mod_sk_iters_per_region(div_mod_sk_iters_per_region)
         ,entries_per_block(entries_per_block)
          {}
   };
@@ -633,16 +648,16 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // Whether this block will perform the first iteration of this tile
     CUTLASS_DEVICE
-    bool tile_started()
+    bool tile_started() const
     {
       return (k_begin == 0);
     }
 
     // Whether this block will perform the last iteration of this tile
     CUTLASS_DEVICE
-    bool tile_finished(Params const &params)
+    bool tile_finished(int problem_size_k) const
     {
-      return (k_end == params.block_mapping.problem_size.k());
+      return (k_end == problem_size_k);
     }
   };
   TileWorkDesc sk_tile_work;
@@ -759,13 +774,34 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   CUTLASS_DEVICE
   int get_first_block_idx(int tile_idx) const
   {
-    int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile;
-    // return get_sk_block_idx(iter);
-    // todo
+    // global-scope
+    int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile; 
 
-    return 0;
+    int region_idx = 0;
+    int iter_in_region = 0;
+    int sk_big_blocks_per_region = 0;
+    int big_block_iters = 0;
+
+    // assume num_region = 1
+    this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
+    assert(region_idx == 0);
+    assert(iter_in_region == iter);
+
+    // number of iterations in the region's normal blocks
+    int normal_block_iters = iter_in_region - big_block_iters;       
+
+    int big_block_idx_in_region = this->sk_runtime_ptr->div_mod_sk_iters_per_big_block.div(iter_in_region);
+    int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_ptr->div_mod_sk_iters_per_normal_block.div(normal_block_iters);
 
 
+    int block_idx_in_region = (big_block_idx_in_region < sk_big_blocks_per_region) ?
+        big_block_idx_in_region :
+        normal_block_idx_in_region;
+
+    //int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
+    int owning_block_idx = block_idx_in_region;
+    assert(owning_block_idx == normal_block_idx_in_region);
+    return owning_block_idx;
   }
 
   //
@@ -1031,6 +1067,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // int reduction_blocks = 0;
     // bool remap_block_indices = false;
     int sk_waves = -1;
+    int sk_iters_per_region;
     assert(sk_blocks > 0);
     {
       sk_waves = (sk_blocks + num_sms - 1) / num_sms;
@@ -1051,8 +1088,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
       // int sk_blocks_per_region = sk_blocks / sk_regions;
       // int sk_big_blocks_per_region = sk_big_blocks / sk_regions;
-      // int sk_iters_per_region = sk_iters / sk_regions;
+      sk_iters_per_region = sk_iters / sk_regions;
     }
+    FastDivmod div_mod_sk_iters_per_normal_block(sk_iters_per_normal_block);
+    FastDivmod div_mod_sk_iters_per_big_block(sk_iters_per_normal_block+1);
+    FastDivmod div_mod_sk_iters_per_region(sk_iters_per_region);
 
 
     //
@@ -1088,6 +1128,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          first_problem.k(),  // all problem size k must be the same for MoE 
          mma_shape_k,
          thread_block_shape,
+         //
+        div_mod_sk_iters_per_normal_block,
+         div_mod_sk_iters_per_big_block,
+         div_mod_sk_iters_per_region,
+         //
          entries_per_block
     );
     if (verbose)
