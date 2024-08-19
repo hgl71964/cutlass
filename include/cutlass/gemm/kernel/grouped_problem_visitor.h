@@ -876,11 +876,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->sk_tile_work = TileWorkDesc{};
 
     {
-      this->barrier_ptr = reinterpret_cast<uint8_t const *>(ptr);
+      this->partials_ptr = ptr;
+      ptr+=sk_info.partials_workspace_bytes;
+
+      this->barrier_ptr = ptr;
       ptr+=sk_info.barrier_workspace_bytes;
 
-      this->partials_ptr = reinterpret_cast<uint8_t const*>(ptr);
-      ptr+=sk_info.partials_workspace_bytes;
     }
 
     // tile offset ptr
