@@ -174,6 +174,7 @@ private:
     BaseKernel::ProblemVisitor::host_precompute_streamk(args.host_problem_sizes,
                                                 args.problem_count,
                                                 args.threadblock_count,
+                                                BaseKernel::kWorkspaceBytesPerBlock,
                                                 // gh512
                                                 sms,
                                                 sm_occupancy,
@@ -250,6 +251,7 @@ public:
       return BaseKernel::ProblemVisitor::get_workspace_size_streamk(args.host_problem_sizes,
                                                                     args.problem_count,
                                                                     args.threadblock_count,
+                                                BaseKernel::kWorkspaceBytesPerBlock,
                                                                     sms,
                                                                     sm_occupancy,
                                                 BaseKernel::Mma::Shape::kK,

@@ -754,7 +754,7 @@ struct ThreadblockSwizzleStreamK {
     int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
 
     if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) {
-      printf("[Get SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
+      printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
     }
 
     return owning_block_idx;

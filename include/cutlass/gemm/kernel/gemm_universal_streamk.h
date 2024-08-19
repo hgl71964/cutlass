@@ -421,6 +421,7 @@ public:
           return Status::kErrorInternal;
         }
       }
+      printf("partials_workspace_bytes %zu, barrier_workspace_bytes %zu\n", partials_workspace_bytes, barrier_workspace_bytes);
 
       return Status::kSuccess;
     }

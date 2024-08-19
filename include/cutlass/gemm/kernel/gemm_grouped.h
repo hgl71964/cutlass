@@ -47,6 +47,8 @@
 #include "cutlass/gemm/kernel/gemm_transpose_operands.h"
 #include "cutlass/gemm/kernel/gemm_grouped_problem_visitor.h"
 
+#include "cutlass/barrier.h"
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -121,6 +123,12 @@ public:
                             kThreadCount,
                             kThreadCount,
                             kTransposed>;
+
+  using AccumulatorTile = typename Mma::FragmentC;
+  static size_t const kWorkspaceBytesPerBlock =
+    __NV_STD_MAX(
+      kThreadCount * sizeof(AccumulatorTile),
+      Epilogue::kWorkspaceBytesPerBlock);
 
   //
   // Structures
@@ -520,6 +528,12 @@ public:
                             kThreadCount,
                             kThreadCount,
                             kTransposed>;
+
+  using AccumulatorTile = typename Mma::FragmentC;
+  static size_t const kWorkspaceBytesPerBlock =
+    __NV_STD_MAX(
+      kThreadCount * sizeof(AccumulatorTile),
+      Epilogue::kWorkspaceBytesPerBlock);
 
   //
   // Structures
