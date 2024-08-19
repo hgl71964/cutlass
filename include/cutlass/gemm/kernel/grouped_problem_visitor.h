@@ -875,6 +875,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     this->sk_tile_work = TileWorkDesc{};
 
+    // partials and barrier ptr
     {
       this->partials_ptr = ptr;
       ptr+=sk_info.partials_workspace_bytes;
@@ -1419,8 +1420,22 @@ public:
       // when sk, tile idx != block idx
       // at this point, sk work has been done, so move to the first dp
       //
-      this->tile_idx += this->dp_start_tile_idx;
-      this->is_sk = false; // turn it off!
+
+    this->tile_idx += this->dp_start_tile_idx;
+    this->is_sk = false; 
+
+      // this->block_iters_remaining -= this->sk_tile_work.k_iters_remaining;
+      // if (this->block_iters_remaining == 0) {
+
+      //   // switch to dp
+      //   this->tile_idx += this->dp_start_tile_idx;
+      //   this->is_sk = false; 
+      // }
+
+      // printf("[Advance] is_sk: %d, block_iters_remaining: %d, sk_tile_work.tile_idx: %d, sk_tile_work.k_begin: %d, sk_tile_work.k_end: %d, sk_tile_work.k_iters_remaining: %d\n", is_sk, block_iters_remaining, this->sk_tile_work.tile_idx, this->sk_tile_work.k_begin, this->sk_tile_work.k_end, this->sk_tile_work.k_iters_remaining);
+
+      // // Continue to next tile; XXX needed?
+      // __syncthreads();
 
     } else {
       this->tile_idx += grid_size;
