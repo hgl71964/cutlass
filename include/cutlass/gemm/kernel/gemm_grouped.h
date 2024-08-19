@@ -693,7 +693,78 @@ public:
 
   CUTLASS_DEVICE
   void sk_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage) {
+    //
+    // Initialize input iterators
+    //
+    int const &problem_idx = problem_visitor.sk_tile_work.problem_idx;
+    auto const &tile_work = problem_visitor.sk_tile_work;
+    using ElementA = typename Mma::IteratorA::Element;
+    using LayoutA = typename Mma::IteratorA::Layout;
+    using ElementB = typename Mma::IteratorB::Element;
+    using LayoutB = typename Mma::IteratorB::Layout;
+    using ElementC = typename Epilogue::OutputTileIterator::Element;
+    using LayoutC = typename Epilogue::OutputTileIterator::Layout;
+
+    // A
+    ElementA *ptr_A = reinterpret_cast<ElementA *>((kTransposed ? params.ptr_B[problem_idx] : params.ptr_A[problem_idx]));
+    typename LayoutA::LongIndex ldm_A = (kTransposed ? params.ldb[problem_idx] : params.lda[problem_idx]);
+
+    int m_begin = tile_work.tiled_coord.m() * Mma::Shape::kM;
+    //int m_end = params.block_mapping.problem_size.m();
+    int m_end = params.problem_visitor.problem_sizes[problem_idx].m();
+
+    typename Mma::IteratorA iterator_A(
+      LayoutA(ldm_A),
+      ptr_A,
+      { m_end, tile_work.k_end },   // extend
+      threadIdx.x,
+      { m_begin, tile_work.k_begin }/* offset */);
+
+    // B
+    ElementB *ptr_B = reinterpret_cast<ElementB *>((kTransposed ? params.ptr_A[problem_idx] : params.ptr_B[problem_idx]));
+    typename LayoutB::LongIndex ldm_B = (kTransposed ? params.lda[problem_idx] : params.ldb[problem_idx]);
+
+    int n_begin = tile_work.tiled_coord.n() * Mma::Shape::kN;
+    // int n_end = params.block_mapping.problem_size.n();
+    int n_end = params.problem_visitor.problem_sizes[problem_idx].n();
+    typename Mma::IteratorB iterator_B(
+        LayoutB(ldm_B),
+        ptr_B,
+        { tile_work.k_end, n_end },
+        threadIdx.x,
+        { tile_work.k_begin, n_begin });
+
+
+
+    //
+    // Matrix multiply phase
+    //
+
+    // Initialize accumulators
+    typename Mma::FragmentC accumulator_tile;
+    accumulator_tile.clear();
+
+    // Broadcast the warp_id computed by lane 0 to ensure dependent code
+    // is compiled as warp-uniform.
+    int warp_idx = canonical_warp_idx_sync();
+    int lane_idx = threadIdx.x % 32;
+
+    // Initialize MMA abstraction
+    Mma mma(
+      shared_storage.kernel.main_loop,
+      threadIdx.x,
+      warp_idx,
+      lane_idx);
+
+    // Perform this tile's range of multiply-accumulate (MAC) iterations
+    mma(tile_work.k_iters_remaining, accumulator_tile, iterator_A, iterator_B, accumulator_tile);
+
+    //
+    // Cooperative SK peer reduction
+    //
+    //int first_block_idx = params.block_mapping.get_first_block_idx(tile_work.tile_idx);
   }
+
  
   CUTLASS_DEVICE
   void dp_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage) {

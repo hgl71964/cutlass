@@ -599,14 +599,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   // sk params
   //
   TileIdxOffset const *tile_idx_offset_ptr;
+  skInfo const *sk_runtime_ptr;
 
   bool is_sk;
   int dp_start_tile_idx{0};
   int dp_start_block_idx{0};
   int block_iter_begin, block_iter_end, block_iters_remaining;
-  int iters_per_tile;
-  int problem_size_k;
-  int mma_shape_k;
   int sk_tile_idx;
 
   // a runtime struct to hold sk-related info;
@@ -630,6 +628,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     /// The number of remaining MAC-iterations this threadblock will perform for this tile
     int k_iters_remaining;
+
+    int problem_idx;
 
     // Whether this block will perform the first iteration of this tile
     CUTLASS_DEVICE
@@ -719,7 +719,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // The first global-scoped MAC-iteration for this tile
     // int tile_iter_begin = tile_idx * params.block_mapping.iters_per_tile();
-    int tile_iter_begin = tile_idx * this->iters_per_tile;
+    int tile_iter_begin = tile_idx * this->sk_runtime_ptr->iters_per_tile;
 
     // The first global-scoped MAC-iteration this threadblock will perform for this tile
     tile_work.iter_begin = max(block_iter_begin, tile_iter_begin);
@@ -735,15 +735,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // The starting index in the k-domain for MAC-iterations this threadblock will perform for this tile
     //tile_work.k_begin = k_iter_begin * Mma::Shape::kK;
-    tile_work.k_begin = k_iter_begin * this->mma_shape_k;
+    tile_work.k_begin = k_iter_begin * this->sk_runtime_ptr->mma_shape_k;
 
     // The ending index (one-past) in the k-domain for MAC-iterations this threadblock will perform for this tile
     //tile_work.k_end = min(
     //    params.block_mapping.problem_size.k(),            // extent of k domain
     //    (k_iter_end * Mma::Shape::kK));                   // extent of the threadblock's global iteration assignment
     tile_work.k_end = min(
-        this->problem_size_k,            // extent of k domain
-        (k_iter_end * this->mma_shape_k)
+        this->sk_runtime_ptr->problem_size_k,            // extent of k domain
+        (k_iter_end * this->sk_runtime_ptr->mma_shape_k)
     );
 
     // The location of this tile (in threadblock-tile coordinates) in the output matrix
@@ -751,8 +751,21 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int m = this->tile_idx_offset_ptr[tile_idx].m;
     int n = this->tile_idx_offset_ptr[tile_idx].n;
     int problem_idx = this->tile_idx_offset_ptr[tile_idx].problem_idx;
-    assert(problem_idx==0);  // assume sk all in first problems for now
+    assert(problem_idx==0);  // XXX assume sk all in first problems for now
     tile_work.tiled_coord = cutlass::gemm::GemmCoord(m, n, 0);
+    tile_work.problem_idx = problem_idx;
+  }
+
+  CUTLASS_DEVICE
+  int get_first_block_idx(int tile_idx) const
+  {
+    int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile;
+    // return get_sk_block_idx(iter);
+    // todo
+
+    return 0;
+
+
   }
 
   //
@@ -768,20 +781,22 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   shared_storage(shared_storage_),
   //problem_info_ptr(reinterpret_cast<ProblemInfo const*>(params_.workspace)),
   tile_idx_offset_ptr(nullptr),
+  sk_runtime_ptr(nullptr),
   problem_info_ptr(nullptr)
   {
     //
     // sk related (can we move this to static schedule? and just prefetch?)
     //
     skInfo const *sk_info_ptr = reinterpret_cast<skInfo const*>(params_.workspace);
+    this->sk_runtime_ptr = sk_info_ptr;
     skInfo sk_info = *sk_info_ptr;
 
     int dp_start_block_idx = sk_info.sk_blocks * sk_info.sk_waves;
     int dp_start_tile_idx = sk_info.sk_tiles;
 
-    if (block_idx == 0 && threadIdx.x == 0) {
-      printf("[SK]: dp_start_block_idx: %d, dp_start_tile_idx: %d\n", dp_start_block_idx, dp_start_tile_idx);
-    }
+    // if (block_idx == 0 && threadIdx.x == 0) {
+    //   printf("[SK]: dp_start_block_idx: %d, dp_start_tile_idx: %d, sk_iters: %d\n", dp_start_block_idx, dp_start_tile_idx, this->sk_runtime_ptr->sk_iters_per_normal_block);
+    // }
     this->dp_start_tile_idx = dp_start_tile_idx;
     this->dp_start_block_idx = dp_start_block_idx;
     if (dp_start_block_idx > 0)
@@ -801,10 +816,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->block_iter_end = block_iter_end;
     this->block_iters_remaining = block_iters_remaining;
 
-    this->iters_per_tile = sk_info.iters_per_tile;
-    this->problem_size_k = sk_info.problem_size_k;
-    this->mma_shape_k = sk_info.mma_shape_k;
-
     this->sk_tile_work = TileWorkDesc{};
 
     // tile offset ptr
@@ -820,7 +831,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //   }
       // }
     }
-    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->iters_per_tile);  
+    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->sk_runtime_ptr->iters_per_tile);  
     
 
     // 
