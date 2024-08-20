@@ -406,7 +406,7 @@ public:
     // which are not assigned tiles still need to perform the work of iterating through
     // problem sizes to determine that they have no work to do. This competes for cycles
     // with those threadblocks that are assigned tiles to compute.
-    std::cout << "multiprocessor count: " << multiprocessor_count << ", max_active_blocks: " << max_active_blocks << ", occupancy_based_block_count: " << occupancy_based_block_count << ", total_tiles: " << total_tiles << std::endl;
+    std::cout << "multiprocessor count: " << multiprocessor_count << ", max_active_blocks: " << max_active_blocks << ", occupancy_based_block_count: " << occupancy_based_block_count << ", total_tiles: " << total_tiles << ", transpose: " << BaseKernel::kTransposed << std::endl;
 
     auto res = std::min(total_tiles, occupancy_based_block_count);
     std::cout << "threadblock count: " << res << std::endl;

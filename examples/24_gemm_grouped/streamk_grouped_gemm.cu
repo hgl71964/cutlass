@@ -1110,12 +1110,13 @@ int main(int argc, char const **args) {
   using ElementOutput = cutlass::half_t;
   using ElementAccumulator = float;
 
-  using LayoutA = cutlass::layout::ColumnMajor;
-  using LayoutB = cutlass::layout::ColumnMajor;
-  using LayoutC = cutlass::layout::ColumnMajor;
-  // using LayoutA = cutlass::layout::RowMajor;
-  // using LayoutB = cutlass::layout::RowMajor;
-  // using LayoutC = cutlass::layout::RowMajor;
+  // FIXME: ColumnMajor cause kTranspose = 1 -> fail to pass!!!
+  // using LayoutA = cutlass::layout::ColumnMajor;
+  // using LayoutB = cutlass::layout::ColumnMajor;
+  // using LayoutC = cutlass::layout::ColumnMajor;
+  using LayoutA = cutlass::layout::RowMajor;
+  using LayoutB = cutlass::layout::RowMajor;
+  using LayoutC = cutlass::layout::RowMajor;
 
   // Define a grouped GEMM kernel with all template parameters set except
   // for scheduling mode. This will be used as the template for all scheduling

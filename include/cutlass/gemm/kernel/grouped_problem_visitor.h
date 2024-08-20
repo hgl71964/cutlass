@@ -418,9 +418,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     iterations_per_block = (params_.tile_count - 1 + gridDim.x) / gridDim.x;
     block_load_start = iterations_per_block * block_idx;
 
-    if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
-      printf("tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
-    }
+    // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
+    //   printf("tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
 
     // Start prefetching the first set of tiles to compute
     prefetch_tiles();
@@ -451,10 +450,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->problem_idx = problem_info.problem_idx;
     this->problem_tile_start = problem_info.problem_start;
 
-    if ((blockIdx.x == 0) && threadIdx.x == 0) {
-      // printf("[NEXT] tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d , problem_tile_end: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile, problem_tile_end);
-      printf("[Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
-    }
+    //if ((blockIdx.x == 0) && threadIdx.x == 0)
+    //  printf("[Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
 
     return true;
   }
@@ -816,9 +813,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int owning_block_idx = block_idx_in_region;
     assert(owning_block_idx == normal_block_idx_in_region);
 
-    if ((blockIdx.x < 3) && threadIdx.x == 0) {
-      printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
-    }
+    // if ((blockIdx.x < 3) && threadIdx.x == 0)
+    //   printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
 
     return owning_block_idx;
   }
@@ -891,7 +887,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       this->tile_idx_offset_ptr = reinterpret_cast<TileIdxOffset const*>(ptr);
       ptr+=sk_info.sk_tiles * sizeof(TileIdxOffset);
 
-      // sanity check
+      // //sanity check 
       // if (block_idx == 0 && threadIdx.x == 0) {
       //   for (int i = 0; i < sk_info.sk_tiles; i++) {
       //     printf("[Check-SK-Schedule] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n, this->tile_idx_offset_ptr[i].problem_idx);
@@ -938,9 +934,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
       init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
 
-      int block_idx = blockIdx.x;
-      if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) 
-        printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
+      // int block_idx = blockIdx.x;
+      // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) 
+      //   printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
 
       //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) 
 
@@ -1118,16 +1114,19 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         Base::possibly_transpose_problem(problem);
         auto grid = Base::grid_shape(problem);
         int tiles = Base::tile_count(grid);
-        int grid_shape_n = grid.n();
+
+        // cannot use ColumnMajor for now!!!
+        assert(ProblemSizeHelper::kTransposed == true);  
+        int grid_shape_base = grid.n();
+        // printf("[DEBUG]: p_idx=%d, tiles=%d, grid_shape_m=%d grid_shape_n=%d, transpose=%d\n", p_idx, tiles, grid.m(), grid.n() , ProblemSizeHelper::kTransposed);
 
         for (int i = 0; i < tiles; ++i, ++tile_idx) {
 
           if (tile_idx >= sk_tiles)
             break;
 
-          // row major
-          int m = i/grid_shape_n;
-          int n = i%grid_shape_n;
+          int m = i/grid_shape_base;
+          int n = i%grid_shape_base;
 
           TileIdxOffset tile_idx_offset;
           tile_idx_offset.problem_idx = p_idx;

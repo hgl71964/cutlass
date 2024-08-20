@@ -778,81 +778,6 @@ public:
     BlockStripedReduceT::load_add(accumulator_tile, accum_tile_workspace + accum_tile_offset, thread_idx);
   }
 
-  CUTLASS_DEVICE
-  void do_epilogue(
-    ProblemVisitor const &problem_visitor,
-    Params const &params,
-    SharedStorage &shared_storage,
-    int warp_idx,
-    int lane_idx,
-    int thread_idx,
-    AccumulatorTile &accumulator_tile)
-  {
-    using ElementC = typename Epilogue::OutputTileIterator::Element;
-    using LayoutC = typename Epilogue::OutputTileIterator::Layout;
-
-    int const &problem_idx = problem_visitor.sk_tile_work.problem_idx;
-    auto const &tile_work = problem_visitor.sk_tile_work;
-
-      EpilogueOutputOp output_op(params.output_op);
-
-      ElementC *ptr_C = params.ptr_C[problem_idx];
-      ElementC *ptr_D = params.ptr_D[problem_idx];
-
-      LayoutC layout_C(params.ldc[problem_idx]);
-      LayoutC layout_D(params.ldd[problem_idx]);
-
-      typename Epilogue::OutputTileIterator::Params params_C(layout_C);
-      typename Epilogue::OutputTileIterator::Params params_D(layout_D);
-
-    // Update pointers for batched/array mode(s)
-    //if (params.mode == GemmUniversalMode::kBatched) {
-    //  ptr_C += tile_work.tiled_coord.k() * params.batch_stride_C;
-    //  ptr_D += tile_work.tiled_coord.k() * params.batch_stride_D;
-    //}
-    //if (params.mode == GemmUniversalMode::kArray) {
-    //  ptr_C = static_cast<ElementC * const *>(params.ptr_C)[tile_work.tiled_coord.k()];
-    //  ptr_D = static_cast<ElementC * const *>(params.ptr_D)[tile_work.tiled_coord.k()];
-    //}
-
-    // Location of this tile in item-coords
-    MatrixCoord threadblock_item_begin(
-      tile_work.tiled_coord.m() * Mma::Shape::kM,
-      tile_work.tiled_coord.n() * Mma::Shape::kN
-    );
-
-    // Tile iterator loading from source tensor.
-    typename Epilogue::OutputTileIterator iterator_C(
-        params_C,
-        ptr_C,
-        //TODO params.block_mapping.problem_size.mn(),
-        params.problem_visitor.problem_sizes[problem_idx].mn(),
-        thread_idx,
-        threadblock_item_begin);
-
-    // Tile iterator writing to destination tensor.
-    typename Epilogue::OutputTileIterator iterator_D(
-        params_D,
-        ptr_D,
-        //TODO params.block_mapping.problem_size.mn(),
-        params.problem_visitor.problem_sizes[problem_idx].mn(),
-        thread_idx,
-        threadblock_item_begin);
-
-      Epilogue epilogue(
-        shared_storage.kernel.epilogue, 
-        thread_idx, 
-        warp_idx, 
-        lane_idx);
-
-      // Execute the epilogue operator to update the destination tensor.
-      epilogue(
-        output_op, 
-        iterator_D, 
-        accumulator_tile, 
-        iterator_C); 
-  }
-
 
   CUTLASS_DEVICE
   void sk_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage) {
@@ -959,8 +884,83 @@ public:
       thread_idx,
       accumulator_tile);
     }
-
   }
+
+  CUTLASS_DEVICE
+  void do_epilogue(
+    ProblemVisitor const &problem_visitor,
+    Params const &params,
+    SharedStorage &shared_storage,
+    int warp_idx,
+    int lane_idx,
+    int thread_idx,
+    AccumulatorTile &accumulator_tile)
+  {
+    using ElementC = typename Epilogue::OutputTileIterator::Element;
+    using LayoutC = typename Epilogue::OutputTileIterator::Layout;
+
+    int const &problem_idx = problem_visitor.sk_tile_work.problem_idx;
+    auto const &tile_work = problem_visitor.sk_tile_work;
+
+      EpilogueOutputOp output_op(params.output_op);
+
+      ElementC *ptr_C = params.ptr_C[problem_idx];
+      ElementC *ptr_D = params.ptr_D[problem_idx];
+
+      LayoutC layout_C(params.ldc[problem_idx]);
+      LayoutC layout_D(params.ldd[problem_idx]);
+
+      typename Epilogue::OutputTileIterator::Params params_C(layout_C);
+      typename Epilogue::OutputTileIterator::Params params_D(layout_D);
+
+    // Update pointers for batched/array mode(s)
+    //if (params.mode == GemmUniversalMode::kBatched) {
+    //  ptr_C += tile_work.tiled_coord.k() * params.batch_stride_C;
+    //  ptr_D += tile_work.tiled_coord.k() * params.batch_stride_D;
+    //}
+    //if (params.mode == GemmUniversalMode::kArray) {
+    //  ptr_C = static_cast<ElementC * const *>(params.ptr_C)[tile_work.tiled_coord.k()];
+    //  ptr_D = static_cast<ElementC * const *>(params.ptr_D)[tile_work.tiled_coord.k()];
+    //}
+
+    // Location of this tile in item-coords
+    MatrixCoord threadblock_item_begin(
+      tile_work.tiled_coord.m() * Mma::Shape::kM,
+      tile_work.tiled_coord.n() * Mma::Shape::kN
+    );
+
+    // Tile iterator loading from source tensor.
+    typename Epilogue::OutputTileIterator iterator_C(
+        params_C,
+        ptr_C,
+        //TODO params.block_mapping.problem_size.mn(),
+        params.problem_visitor.problem_sizes[problem_idx].mn(),
+        thread_idx,
+        threadblock_item_begin);
+
+    // Tile iterator writing to destination tensor.
+    typename Epilogue::OutputTileIterator iterator_D(
+        params_D,
+        ptr_D,
+        //TODO params.block_mapping.problem_size.mn(),
+        params.problem_visitor.problem_sizes[problem_idx].mn(),
+        thread_idx,
+        threadblock_item_begin);
+
+      Epilogue epilogue(
+        shared_storage.kernel.epilogue, 
+        thread_idx, 
+        warp_idx, 
+        lane_idx);
+
+      // Execute the epilogue operator to update the destination tensor.
+      epilogue(
+        output_op, 
+        iterator_D, 
+        accumulator_tile, 
+        iterator_C); 
+  }
+
 
  
   CUTLASS_DEVICE
