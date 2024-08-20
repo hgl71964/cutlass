@@ -947,105 +947,105 @@ public:
     //
     // Warm-up run of the grouped GEMM object
     //
-    // result.status = gemm.run();
+    result.status = gemm.run();
 
-    // if (result.status != cutlass::Status::kSuccess) {
-    //   std::cerr << "Failed to run CUTLASS Grouped GEMM kernel." << std::endl;
-    //   return result;
-    // }
+    if (result.status != cutlass::Status::kSuccess) {
+      std::cerr << "Failed to run CUTLASS Grouped GEMM kernel." << std::endl;
+      return result;
+    }
 
-    // //
-    // // Construct events
-    // //
+    //
+    // Construct events
+    //
 
-    // cudaEvent_t events[2];
+    cudaEvent_t events[2];
 
-    // for (auto & event : events) {
-    //   result.error = cudaEventCreate(&event);
-    //   if (result.error != cudaSuccess) {
-    //     std::cerr << "cudaEventCreate() failed: " << cudaGetErrorString(result.error) << std::endl;
-    //     return -1;
-    //   }
-    // }
+    for (auto & event : events) {
+      result.error = cudaEventCreate(&event);
+      if (result.error != cudaSuccess) {
+        std::cerr << "cudaEventCreate() failed: " << cudaGetErrorString(result.error) << std::endl;
+        return -1;
+      }
+    }
 
-    // // Record an event at the start of a series of GEMM operations
-    // result.error = cudaEventRecord(events[0]);
-    // if (result.error != cudaSuccess) {
-    //   std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
-    //   return result;
-    // }
+    // Record an event at the start of a series of GEMM operations
+    result.error = cudaEventRecord(events[0]);
+    if (result.error != cudaSuccess) {
+      std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
+      return result;
+    }
 
-    // //
-    // // Run profiling loop
-    // //
+    //
+    // Run profiling loop
+    //
 
-    // for (int iter = 0; iter < this->options.iterations; ++iter) {
-    //   gemm();
-    // }
+    for (int iter = 0; iter < this->options.iterations; ++iter) {
+      gemm();
+    }
 
-    // //
-    // // Stop profiling loop
-    // //
+    //
+    // Stop profiling loop
+    //
 
-    // // Record an event when the GEMM operations have been launched.
-    // result.error = cudaEventRecord(events[1]);
-    // if (result.error != cudaSuccess) {
-    //   std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
-    //   return result;
-    // }
+    // Record an event when the GEMM operations have been launched.
+    result.error = cudaEventRecord(events[1]);
+    if (result.error != cudaSuccess) {
+      std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
+      return result;
+    }
 
-    // // Wait for work on the device to complete.
-    // result.error = cudaEventSynchronize(events[1]);
-    // if (result.error != cudaSuccess) {
-    //   std::cerr << "cudaEventSynchronize() failed: " << cudaGetErrorString(result.error) << std::endl;
-    //   return result;
-    // }
+    // Wait for work on the device to complete.
+    result.error = cudaEventSynchronize(events[1]);
+    if (result.error != cudaSuccess) {
+      std::cerr << "cudaEventSynchronize() failed: " << cudaGetErrorString(result.error) << std::endl;
+      return result;
+    }
 
-    // // Measure elapsed runtime
-    // float runtime_ms = 0;
-    // result.error = cudaEventElapsedTime(&runtime_ms, events[0], events[1]);
-    // if (result.error != cudaSuccess) {
-    //   std::cerr << "cudaEventElapsed() failed: " << cudaGetErrorString(result.error) << std::endl;
-    //   return result;
-    // }
+    // Measure elapsed runtime
+    float runtime_ms = 0;
+    result.error = cudaEventElapsedTime(&runtime_ms, events[0], events[1]);
+    if (result.error != cudaSuccess) {
+      std::cerr << "cudaEventElapsed() failed: " << cudaGetErrorString(result.error) << std::endl;
+      return result;
+    }
 
     // // Compute average runtime and GFLOPs.
-    // result.runtime_ms = double(runtime_ms) / double(this->options.iterations);
-    // result.gflops = this->options.gflops(result.runtime_ms / 1000.0);
+    result.runtime_ms = double(runtime_ms) / double(this->options.iterations);
+    result.gflops = this->options.gflops(result.runtime_ms / 1000.0);
 
     //
     // Cleanup
     //
 
-    // for (auto event : events) {
-    //   (void)cudaEventDestroy(event);
-    // }
+    for (auto event : events) {
+      (void)cudaEventDestroy(event);
+    }
 
     // Optionally profile initialization
-    // if (this->options.profile_initialization) {
-    //   // Warm up
-    //   gemm.initialize(args, workspace.get());
+    if (this->options.profile_initialization) {
+      // Warm up
+      gemm.initialize(args, workspace.get());
 
-    //   auto start_time = std::chrono::high_resolution_clock::now();
-    //   for (int32_t i = 0; i < this->options.iterations; ++i) {
-    //     gemm.initialize(args, workspace.get());
-    //   }
-    //   auto end_time = std::chrono::high_resolution_clock::now();
+      auto start_time = std::chrono::high_resolution_clock::now();
+      for (int32_t i = 0; i < this->options.iterations; ++i) {
+        gemm.initialize(args, workspace.get());
+      }
+      auto end_time = std::chrono::high_resolution_clock::now();
 
-    //   std::chrono::duration<double, std::milli> duration = end_time - start_time;
-    //   duration /= double(this->options.iterations);
-    //   result.initialization_time_ms = duration.count();
-    // }
+      std::chrono::duration<double, std::milli> duration = end_time - start_time;
+      duration /= double(this->options.iterations);
+      result.initialization_time_ms = duration.count();
+    }
 
-    // int64_t total_tiles = Gemm::group_tile_count(args);
-    // std::cout << "    " << total_tiles << " total threadblock tiles." << std::endl;
+    int64_t total_tiles = Gemm::group_tile_count(args);
+    std::cout << "    " << total_tiles << " total threadblock tiles." << std::endl;
 
-    // std::cout << std::endl;
-    // std::cout << "    " << "Grouped Runtime: " << result.runtime_ms << " ms" << std::endl;
-    // std::cout << "    " << "Grouped  GFLOPs: " << result.gflops << std::endl;
-    // if (this->options.profile_initialization) {
-    //   std::cout << "    " << "Init    Runtime: " << result.initialization_time_ms << " ms" << std::endl;
-    // }
+    std::cout << std::endl;
+    std::cout << "    " << "Grouped Runtime: " << result.runtime_ms << " ms" << std::endl;
+    std::cout << "    " << "Grouped  GFLOPs: " << result.gflops << std::endl;
+    if (this->options.profile_initialization) {
+      std::cout << "    " << "Init    Runtime: " << result.initialization_time_ms << " ms" << std::endl;
+    }
 
     // if (this->options.output_file.good()) {
     //   this->options.output_file << this->options.output_tag << ",CUTLASS,grouped-" << sched_mode << ","

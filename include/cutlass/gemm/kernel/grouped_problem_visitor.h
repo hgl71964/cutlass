@@ -262,9 +262,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->problem_idx = -1 * kThreadsPerWarp;
     this->problem_tile_start = 0;
 
-    if ((block_idx == 0 || block_idx == 1) && threadIdx.x == 0) {
-      printf("tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile);
-    }
+    // if ((block_idx == 0 || block_idx == 1) && threadIdx.x == 0)
+    //   printf("tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile);
 
   }
 
@@ -347,11 +346,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       this->problem_tile_start = __shfl_sync(0xffffffff, problem_ending_tile, problem_idx_in_group - 1);
     }
 
-    if ((blockIdx.x == 0) && threadIdx.x == 0) {
-      // printf("[NEXT] tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d , problem_tile_end: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile, problem_tile_end);
-
-      printf("[Next] tiled_idx: %d, problem_tile_start: %d, problem_tile_end: %d, group_tile_start: %d, group_tile_end: %d, problem_idx: %d, problem_index_in_group: %d\n", this->tile_idx, this->problem_tile_start, problem_tile_end, group_tile_start, group_tile_end, this->problem_idx, problem_idx_in_group);
-    }
+    // if ((blockIdx.x == 0) && threadIdx.x == 0) 
+    //   printf("[Next] tiled_idx: %d, problem_tile_start: %d, problem_tile_end: %d, group_tile_start: %d, group_tile_end: %d, problem_idx: %d, problem_index_in_group: %d\n", this->tile_idx, this->problem_tile_start, problem_tile_end, group_tile_start, group_tile_end, this->problem_idx, problem_idx_in_group);
 
     return true;
   }
@@ -1440,8 +1436,8 @@ public:
         this->tile_idx += this->sk_runtime_ptr->sk_tiles;
         this->is_sk = false; 
 
-        if ((blockIdx.x == 0 ) && threadIdx.x == 0) 
-          printf("\n");
+        // if ((blockIdx.x == 0 ) && threadIdx.x == 0) 
+        //   printf("\n");
       }
 
 

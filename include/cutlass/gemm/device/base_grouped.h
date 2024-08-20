@@ -527,10 +527,10 @@ public:
     dim3 grid(params_.threadblock_count, 1, 1);
     dim3 block(BaseKernel::kThreadCount, 1, 1);
 
-    std::cout << "grid: " << grid.x << " " << grid.y << " " << grid.z << std::endl;
-    std::cout << "block: " << block.x << " " << block.y << " " << block.z << std::endl;
-    std::cout << "[LAUNCH]" << std::endl;
-    std::cout << std::endl;
+    // std::cout << "grid: " << grid.x << " " << grid.y << " " << grid.z << std::endl;
+    // std::cout << "block: " << block.x << " " << block.y << " " << block.z << std::endl;
+    // std::cout << "[LAUNCH]" << std::endl;
+    // std::cout << std::endl;
 
     int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
 
