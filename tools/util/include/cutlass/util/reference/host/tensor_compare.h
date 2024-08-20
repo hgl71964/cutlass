@@ -37,6 +37,11 @@
 // Standard Library includes
 #include <utility>
 
+#include <unordered_set>
+#include <tuple>
+
+
+
 // Cutlass includes
 #include "cutlass/cutlass.h"
 #include "cutlass/relatively_equal.h"
@@ -475,6 +480,23 @@ std::tuple<int, int, int, int, int> TensorEqualsWithCount(
     func
   );
 
+  // struct hashFunction 
+  // { 
+  //   size_t operator()(const std::tuple<int32_t ,  int32_t >&x) const
+  //   { 
+  //     return std::get<0>(x) ^ std::get<1>(x) ;
+  //   } 
+  // }; 
+  // std::unordered_set<std::tuple<int32_t,int32_t>, hashFunction> errors{};
+
+  std::vector<std::tuple<int, int>> errors{};
+  auto isDuplicate = [&errors](const std::tuple<int, int>& item) -> bool {
+        // Check if the item already exists in the vector
+        return std::any_of(errors.begin(), errors.end(), [item](const std::tuple<int, int>& t) {
+            return std::get<0>(t) == std::get<0>(item) && std::get<1>(t) == std::get<1>(item);
+        });
+  };
+
   // min, max wrong element
   int min_x = INT_MAX;
   int min_y = INT_MAX;
@@ -490,7 +512,21 @@ std::tuple<int, int, int, int, int> TensorEqualsWithCount(
 
     max_x = std::max(coord.at(0), max_x);
     max_y = std::max(coord.at(1), max_y);
+
+    // NOTE assume grid size is 128
+    // errors.insert({coord.at(0)/128, coord.at(1)/128});
+    std::tuple<int, int> t = {coord.at(0)/128, coord.at(1)/128};
+    if (!isDuplicate(t)) {
+      errors.push_back(t);
+    }
   }
+
+  std::cout << "error grid size: " << errors.size() << std::endl;
+  for (auto &coord : errors) {
+    std::cout << "coord: " << std::get<0>(coord) << " " << std::get<1>(coord) << ";; ";
+  }
+  std::cout << std::endl;
+  std::cout << std::endl;
 
   return {min_x, min_y, max_x, max_y, func.cnt};
 }

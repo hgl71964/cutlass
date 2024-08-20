@@ -713,14 +713,13 @@ public:
     AccumulatorTile const &accumulator_tile,
     ProblemVisitor const &problem_visitor,
     int block_idx,
+    int thread_idx,
     int first_block_idx)
   {
     //AccumulatorTile *accum_tile_workspace = reinterpret_cast<AccumulatorTile *>(params.partials_workspace);
     AccumulatorTile *accum_tile_workspace = reinterpret_cast<AccumulatorTile *>(problem_visitor.partials_ptr);
 
     int accum_tile_offset = first_block_idx * kThreadCount;
-
-    int thread_idx = threadIdx.x;
 
     if (block_idx == first_block_idx)
     {
@@ -729,6 +728,8 @@ public:
     }
     else
     {
+      // Barrier::wait_lt(problem_visitor.barrier_ptr, thread_idx, first_block_idx, 1);
+
       // Subsequent peers atomically accumulate into the workspace partials
       //if (ThreadblockSwizzle::kReductionStrategy == ThreadblockSwizzle::kAtomic)
       //{
@@ -760,12 +761,11 @@ public:
     AccumulatorTile &accumulator_tile,
     ProblemVisitor const &problem_visitor,
     int block_idx,
+    int thread_idx,
     int first_block_idx)
   {
     //AccumulatorTile *accum_tile_workspace = reinterpret_cast<AccumulatorTile *>(params.partials_workspace);
     AccumulatorTile *accum_tile_workspace = reinterpret_cast<AccumulatorTile *>(problem_visitor.partials_ptr);
-
-    int thread_idx = threadIdx.x;
 
     // Wait for arrival
     int num_carry_in = block_idx - first_block_idx;
@@ -785,12 +785,9 @@ public:
     SharedStorage &shared_storage,
     int warp_idx,
     int lane_idx,
+    int thread_idx,
     AccumulatorTile &accumulator_tile)
   {
-    using ElementA = typename Mma::IteratorA::Element;
-    using LayoutA = typename Mma::IteratorA::Layout;
-    using ElementB = typename Mma::IteratorB::Element;
-    using LayoutB = typename Mma::IteratorB::Layout;
     using ElementC = typename Epilogue::OutputTileIterator::Element;
     using LayoutC = typename Epilogue::OutputTileIterator::Layout;
 
@@ -817,7 +814,6 @@ public:
     //  ptr_C = static_cast<ElementC * const *>(params.ptr_C)[tile_work.tiled_coord.k()];
     //  ptr_D = static_cast<ElementC * const *>(params.ptr_D)[tile_work.tiled_coord.k()];
     //}
-    int thread_idx = threadIdx.x;
 
     // Location of this tile in item-coords
     MatrixCoord threadblock_item_begin(
@@ -915,6 +911,8 @@ public:
     // is compiled as warp-uniform.
     int warp_idx = canonical_warp_idx_sync();
     int lane_idx = threadIdx.x % 32;
+    int thread_idx = threadIdx.x;
+    int block_idx = blockIdx.x;
 
     // Initialize MMA abstraction
     Mma mma(
@@ -940,8 +938,7 @@ public:
 
       // // Non "finishing" SK blocks must share their partial accumulator sums through global scratch workspace
       // share_accumulators(accumulator_tile, block_idx, first_block_idx);
-      share_accumulators(accumulator_tile, problem_visitor, blockIdx.x, first_block_idx);
-
+      share_accumulators(accumulator_tile, problem_visitor, block_idx, thread_idx, first_block_idx);
     }
     else
     {
@@ -951,7 +948,7 @@ public:
       {
         // A "finishing" SK block must first aggregate its accumulator partial sums with those shared by peer threadblocks
         // acquire_accumulators(accumulator_tile, block_idx, first_block_idx);
-        acquire_accumulators(accumulator_tile, problem_visitor, blockIdx.x, first_block_idx);
+        acquire_accumulators(accumulator_tile, problem_visitor, block_idx, thread_idx, first_block_idx);
       }
 
       do_epilogue(problem_visitor, 
@@ -959,9 +956,8 @@ public:
       shared_storage, 
       warp_idx, 
       lane_idx, 
+      thread_idx,
       accumulator_tile);
-
-      ;
     }
 
   }

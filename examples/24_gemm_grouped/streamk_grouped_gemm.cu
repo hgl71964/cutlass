@@ -762,7 +762,9 @@ public:
         //
         // this shows the extent of error; however the extent may not be squared!!! <- depends on ColumnMajor/RowMajor
         //
-        std::cout << "Count: " << cnt << ", min_x: " << min_x << ", min block_x id: " << min_x / Gemm::BaseKernel::ThreadblockShape::kM << ", min_y: " << min_y << ", min block_y id: " << min_y / Gemm::BaseKernel::ThreadblockShape::kN << ", max_x: " << max_x << ", max block_x id: " << max_x / Gemm::BaseKernel::ThreadblockShape::kM << ", max_y: " << max_y << ", max block_y id: " << max_y / Gemm::BaseKernel::ThreadblockShape::kN << std::endl;
+        //std::cout << "Count: " << cnt << ", min_x: " << min_x << ", min block_x id: " << min_x / Gemm::BaseKernel::ThreadblockShape::kM << ", min_y: " << min_y << ", min block_y id: " << min_y / Gemm::BaseKernel::ThreadblockShape::kN << ", max_x: " << max_x << ", max block_x id: " << max_x / Gemm::BaseKernel::ThreadblockShape::kM << ", max_y: " << max_y << ", max block_y id: " << max_y / Gemm::BaseKernel::ThreadblockShape::kN << std::endl;
+
+        std::cout << "Count: " << cnt << ", min block_x id: " << min_x / Gemm::BaseKernel::ThreadblockShape::kM << ", min block_y id: " << min_y / Gemm::BaseKernel::ThreadblockShape::kN << ", max block_x id: " << max_x / Gemm::BaseKernel::ThreadblockShape::kM << ", max block_y id: " << max_y / Gemm::BaseKernel::ThreadblockShape::kN << std::endl;
 
         std::cout << std::endl;
       }

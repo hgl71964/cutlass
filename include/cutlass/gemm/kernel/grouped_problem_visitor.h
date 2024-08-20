@@ -634,8 +634,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   void *partials_ptr;
 
   bool is_sk;
-  int dp_start_tile_idx{0};
-  int dp_start_block_idx{0};
   int block_iter_begin, block_iter_end, block_iters_remaining;
   int sk_tile_idx;
 
@@ -817,6 +815,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
     int owning_block_idx = block_idx_in_region;
     assert(owning_block_idx == normal_block_idx_in_region);
+
+    if ((blockIdx.x < 3) && threadIdx.x == 0) {
+      printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
+    }
+
     return owning_block_idx;
   }
 
@@ -849,17 +852,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     ptr += sizeof(skInfo);
 
     int dp_start_block_idx = sk_info.sk_blocks * sk_info.sk_waves;
-    int dp_start_tile_idx = sk_info.sk_tiles;
+    // int dp_start_tile_idx = sk_info.sk_tiles;
 
     // if (block_idx == 0 && threadIdx.x == 0) {
     //   printf("[SK]: dp_start_block_idx: %d, dp_start_tile_idx: %d, sk_iters: %d\n", dp_start_block_idx, dp_start_tile_idx, this->sk_runtime_ptr->sk_iters_per_normal_block);
     // }
-    this->dp_start_tile_idx = dp_start_tile_idx;
-    this->dp_start_block_idx = dp_start_block_idx;
     if (dp_start_block_idx > 0)
-      is_sk = true;
+      this->is_sk = true;
     else
-      is_sk = false;
+      this->is_sk = false;
 
     // init sk global-scope block extent
     int block_iter_begin, block_iter_end, block_iters_remaining;
@@ -898,6 +899,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       // }
     }
     this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->sk_runtime_ptr->iters_per_tile);  
+
     
 
     // 
@@ -916,13 +918,13 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     }
 
 
-    if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
+    //if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
 
-      printf("[ProblemVisitor]: Bid: %d, tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", block_idx, params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
+    //  printf("[ProblemVisitor]: Bid: %d, tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", block_idx, params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
 
-      printf("\n");
+    //  printf("\n");
 
-    }
+    //}
 
     // Start prefetching the first set of tiles to compute
     prefetch_tiles();
@@ -936,9 +938,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
       init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
 
+      int block_idx = blockIdx.x;
+      if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) 
+        printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
+
       //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) 
-      if ((blockIdx.x == 0 || blockIdx.x == 1 || blockIdx.x==127) && threadIdx.x == 0)
-        printf("[SK-Next] Bid: %d, block_iters_remaining: %d, sk_tile_work.tile_idx: %d, sk_tile_work.k_begin: %d, sk_tile_work.k_end: %d, sk_tile_work.k_iters_remaining: %d\n", blockIdx.x, block_iters_remaining, this->sk_tile_work.tile_idx, this->sk_tile_work.k_begin, this->sk_tile_work.k_end, this->sk_tile_work.k_iters_remaining);
 
       return true;
     }
@@ -971,10 +975,10 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->problem_idx = problem_info.problem_idx;
     this->problem_tile_start = problem_info.problem_start;
 
-    if ((blockIdx.x == 0) && threadIdx.x == 0) {
-      // printf("[NEXT] tile_count: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, problem_ending_tile: %d , problem_tile_end: %d\n", this->params.tile_count, this->tile_idx, this->problem_tile_start, this->problem_idx, this->problem_ending_tile, problem_tile_end);
-      printf("[DP-Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
-    }
+    // if ((blockIdx.x == 0) && threadIdx.x == 0) {
+    //   printf("[DP-Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
+    //   ;
+    // }
 
     return true;
   }
@@ -1434,7 +1438,7 @@ public:
       if (this->block_iters_remaining == 0) {
 
         // switch to dp
-        this->tile_idx += this->dp_start_tile_idx;
+        this->tile_idx += this->sk_runtime_ptr->sk_tiles;
         this->is_sk = false; 
 
         if ((blockIdx.x == 0 ) && threadIdx.x == 0) 
