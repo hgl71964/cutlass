@@ -1420,15 +1420,6 @@ public:
   void advance(int32_t grid_size) {
     if (this->is_sk) {
 
-      //
-      // XXX assume there's one wave of sk
-      // when sk, tile idx != block idx
-      // at this point, sk work has been done, so move to the first dp
-      //
-
-    // this->tile_idx += this->dp_start_tile_idx;
-    // this->is_sk = false; 
-
       this->block_iters_remaining -= this->sk_tile_work.k_iters_remaining;
       if (this->block_iters_remaining == 0) {
 

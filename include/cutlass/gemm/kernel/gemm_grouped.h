@@ -728,7 +728,8 @@ public:
     }
     else
     {
-      // Barrier::wait_lt(problem_visitor.barrier_ptr, thread_idx, first_block_idx, 1);
+
+      // TODO which strategy faster???
 
       // Subsequent peers atomically accumulate into the workspace partials
       //if (ThreadblockSwizzle::kReductionStrategy == ThreadblockSwizzle::kAtomic)
@@ -1127,12 +1128,6 @@ public:
       params.problem_visitor,
       shared_storage.problem_visitor,
       blockIdx.x);
-
-
-    //
-    // sk
-    //
-
 
 
     while (problem_visitor.next_tile()) {

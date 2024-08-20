@@ -957,6 +957,7 @@ public:
     //
     // Construct events
     //
+    std::cout << "[Benchmark] Running benchmark with " << this->options.iterations << " iterations...\n";
 
     cudaEvent_t events[2];
 
@@ -1012,6 +1013,8 @@ public:
     // // Compute average runtime and GFLOPs.
     result.runtime_ms = double(runtime_ms) / double(this->options.iterations);
     result.gflops = this->options.gflops(result.runtime_ms / 1000.0);
+
+    std::cout << "[Benchmark] Done." << std::endl;
 
     //
     // Cleanup
