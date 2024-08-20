@@ -195,7 +195,7 @@ struct BaseGroupedProblemVisitor {
                                   int sm_occupancy,
                                   int mma_shape_k,
                                   GemmCoord thread_block_shape
-                                  ) 
+                                  )
                                   {return 0;}
   static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
                               int32_t problem_count,
@@ -346,7 +346,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       this->problem_tile_start = __shfl_sync(0xffffffff, problem_ending_tile, problem_idx_in_group - 1);
     }
 
-    // if ((blockIdx.x == 0) && threadIdx.x == 0) 
+    // if ((blockIdx.x == 0) && threadIdx.x == 0)
     //   printf("[Next] tiled_idx: %d, problem_tile_start: %d, problem_tile_end: %d, group_tile_start: %d, group_tile_end: %d, problem_idx: %d, problem_index_in_group: %d\n", this->tile_idx, this->problem_tile_start, problem_tile_end, group_tile_start, group_tile_end, this->problem_idx, problem_idx_in_group);
 
     return true;
@@ -447,7 +447,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->problem_tile_start = problem_info.problem_start;
 
     //if ((blockIdx.x == 0) && threadIdx.x == 0)
-    //  printf("[Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
+    //  printf("[Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start);
 
     return true;
   }
@@ -541,6 +541,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     FastDivmod div_mod_sk_iters_per_normal_block;
     FastDivmod div_mod_sk_iters_per_big_block;
     FastDivmod div_mod_sk_iters_per_region;
+    //FastDivmod div_mod_iters_per_tile;
     //
       size_t partials_workspace_bytes;
       size_t barrier_workspace_bytes;
@@ -567,6 +568,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     FastDivmod div_mod_sk_iters_per_normal_block,
     FastDivmod div_mod_sk_iters_per_big_block,
     FastDivmod div_mod_sk_iters_per_region,
+    //FastDivmod div_mod_iters_per_tile,
     //
       size_t partials_workspace_bytes,
       size_t barrier_workspace_bytes,
@@ -587,6 +589,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,div_mod_sk_iters_per_normal_block(div_mod_sk_iters_per_normal_block)
         ,div_mod_sk_iters_per_big_block(div_mod_sk_iters_per_big_block)
         ,div_mod_sk_iters_per_region(div_mod_sk_iters_per_region)
+        //,div_mod_iters_per_tile(div_mod_iters_per_tile)
         ,partials_workspace_bytes(partials_workspace_bytes)
         ,barrier_workspace_bytes(barrier_workspace_bytes)
         ,entries_per_block(entries_per_block)
@@ -699,8 +702,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_big_blocks_per_region = 0;
 
     // only one region
-    assert(region_idx == 0);
-    assert(block_idx_in_region==sk_block_idx);
+    //assert(region_idx == 0);
+    //assert(block_idx_in_region==sk_block_idx);
     //
 
     // block_iter_begin = (region_idx * sk_iters_per_region) + (block_idx_in_region * sk_iters_per_normal_block);
@@ -722,10 +725,14 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   CUTLASS_DEVICE
   int get_sk_tile_idx(int iter, int iters_per_tile) const
   {
-    // int tile_idx = div_mod_iters_per_tile.div(iter);
-    // return tile_idx;
+    //int tile_idx = this->sk_runtime_ptr->div_mod_iters_per_tile.div(iter);
+    //return tile_idx;
 
-    // TODO use div_mod_iters_per_tile
+    // XXX use div_mod_iters_per_tile
+    // it seems use div_mod_iters_per_tile is slower
+    // possibly due to save too much to skInfo??
+    //
+
     return iter/iters_per_tile;
   }
 
@@ -782,7 +789,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   int get_first_block_idx(int tile_idx) const
   {
     // global-scope
-    int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile; 
+    int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile;
 
     int region_idx = 0;
     int iter_in_region = 0;
@@ -795,7 +802,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     assert(iter_in_region == iter);
 
     // number of iterations in the region's normal blocks
-    int normal_block_iters = iter_in_region - big_block_iters;       
+    int normal_block_iters = iter_in_region - big_block_iters;
 
     int big_block_idx_in_region = this->sk_runtime_ptr->div_mod_sk_iters_per_big_block.div(iter_in_region);
     int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_ptr->div_mod_sk_iters_per_normal_block.div(normal_block_iters);
@@ -883,18 +890,18 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       this->tile_idx_offset_ptr = reinterpret_cast<TileIdxOffset const*>(ptr);
       ptr+=sk_info.sk_tiles * sizeof(TileIdxOffset);
 
-      // //sanity check 
+      // //sanity check
       // if (block_idx == 0 && threadIdx.x == 0) {
       //   for (int i = 0; i < sk_info.sk_tiles; i++) {
       //     printf("[Check-SK-Schedule] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n, this->tile_idx_offset_ptr[i].problem_idx);
       //   }
       // }
     }
-    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->sk_runtime_ptr->iters_per_tile);  
+    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->sk_runtime_ptr->iters_per_tile);
 
-    
 
-    // 
+
+    //
     // dp related
     //
 
@@ -931,10 +938,10 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
 
       // int block_idx = blockIdx.x;
-      // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) 
+      // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
       //   printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
 
-      //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) 
+      //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
 
       return true;
     }
@@ -968,7 +975,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->problem_tile_start = problem_info.problem_start;
 
     // if ((blockIdx.x == 0) && threadIdx.x == 0) {
-    //   printf("[DP-Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start); 
+    //   printf("[DP-Next] tiled_idx: %d, prefetch_idx: %d, tiles_computed: %d, problem_idx: %d, problem_tile_start: %d\n", this->tile_idx, prefetch_idx, tiles_computed, this->problem_idx, this->problem_tile_start);
     //   ;
     // }
 
@@ -983,14 +990,14 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   //
 
   // Pad the given allocation size up to the nearest cache line
-  static size_t cacheline_align_up(size_t size) 
+  static size_t cacheline_align_up(size_t size)
   {
     static const int CACHELINE_SIZE = 128;
     return (size + CACHELINE_SIZE - 1) / CACHELINE_SIZE * CACHELINE_SIZE;
   }
 
   /// Get the workspace size needed for barrier
-  static size_t get_barrier_workspace_size(skInfo& sk_info, size_t kWorkspaceBytesPerBlock) 
+  static size_t get_barrier_workspace_size(skInfo& sk_info, size_t kWorkspaceBytesPerBlock)
   {
     // For atomic reduction, each SK-block needs a synchronization flag.  For parallel reduction,
     // each reduction block needs its own synchronization flag.
@@ -1004,7 +1011,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   }
 
   /// Get the workspace size needed for intermediate partial sums
-  static size_t get_partials_workspace_size(skInfo& sk_info, size_t kWorkspaceBytesPerBlock) 
+  static size_t get_partials_workspace_size(skInfo& sk_info, size_t kWorkspaceBytesPerBlock)
   {
     // int sk_blocks = block_mapping.sk_regions() * block_mapping.sk_blocks_per_region();
     int sk_blocks = sk_info.sk_blocks;
@@ -1022,8 +1029,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                                   GemmCoord thread_block_shape
                                   //
                                    ) {
-                            
-    auto sk_info = plan_sk(host_problem_sizes_ptr, 
+
+    auto sk_info = plan_sk(host_problem_sizes_ptr,
                       problem_count,
                       num_sms,
                       sm_occupancy,
@@ -1057,7 +1064,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     uint8_t *ptr = reinterpret_cast<uint8_t*>(host_workspace_ptr);
 
-    auto sk_info = plan_sk(host_problem_sizes_ptr, 
+    auto sk_info = plan_sk(host_problem_sizes_ptr,
                       problem_count,
                       num_sms,
                       sm_occupancy,
@@ -1111,8 +1118,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         auto grid = Base::grid_shape(problem);
         int tiles = Base::tile_count(grid);
 
-        // cannot use ColumnMajor for now!!!
-        assert(ProblemSizeHelper::kTransposed == true);  
+        // XXX cannot use ColumnMajor for now!!!
+        assert(ProblemSizeHelper::kTransposed == true);
         int grid_shape_base = grid.n();
         // printf("[DEBUG]: p_idx=%d, tiles=%d, grid_shape_m=%d grid_shape_n=%d, transpose=%d\n", p_idx, tiles, grid.m(), grid.n() , ProblemSizeHelper::kTransposed);
 
@@ -1145,11 +1152,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //
     ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(ptr);
 
-    // 
-    // based on sk info, plan the rest dp blocks  
+    //
+    // based on sk info, plan the rest dp blocks
     //
 
-    //// NOTE assign all to dp 
+    //// NOTE assign all to dp
     // int32_t total_tiles = Base::group_tile_count(host_problem_sizes_ptr, problem_count);
     // int32_t entries_per_block = (total_tiles - 1 + block_count) / block_count;
     //
@@ -1169,12 +1176,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         //
         // for [0 - entries_per_block], it's the work belongs to block 0
         //
-        // for problems 0, if it has 128 tiles (assume 128 sms), each sm takes one tile, 
+        // for problems 0, if it has 128 tiles (assume 128 sms), each sm takes one tile,
         // so its tiles are distributed across sms
         //
 
         if (tile < sk_info.sk_tiles) {
-          ; // sk 
+          ; // sk
         } else {
           int dp_work_assignment = tile - sk_info.sk_tiles; // start from 0
           host_problem_info_ptr[(entries_per_block * (dp_work_assignment % block_count)) + (dp_work_assignment / block_count)] = problem_info;
@@ -1267,7 +1274,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
 
     // Number of thread blocks to produce the remaining SK tiles
-    int sk_blocks = 0;              
+    int sk_blocks = 0;
     int savings_iters = INT_MIN;
     {
       // heuristic for picking sk_blocks
@@ -1344,6 +1351,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     FastDivmod div_mod_sk_iters_per_normal_block(sk_iters_per_normal_block);
     FastDivmod div_mod_sk_iters_per_big_block(sk_iters_per_normal_block+1);
     FastDivmod div_mod_sk_iters_per_region(sk_iters_per_region);
+    //FastDivmod div_mod_iters_per_tile(iters_per_tile);
 
 
     //
@@ -1377,13 +1385,14 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          sk_waves,
          sk_iters_per_normal_block,
          iters_per_tile,
-         first_problem.k(),  // all problem size k must be the same for MoE 
+         first_problem.k(),  // all problem size k must be the same for MoE
          mma_shape_k,
          thread_block_shape,
          //
         div_mod_sk_iters_per_normal_block,
          div_mod_sk_iters_per_big_block,
          div_mod_sk_iters_per_region,
+         //div_mod_iters_per_tile,
          //
          0,
          0,
@@ -1402,7 +1411,7 @@ private:
   CUTLASS_DEVICE
   void prefetch_tiles() {
 
-    // 
+    //
     // this is dp logic!!!
     //
 
@@ -1425,14 +1434,14 @@ public:
 
         // switch to dp
         this->tile_idx += this->sk_runtime_ptr->sk_tiles;
-        this->is_sk = false; 
+        this->is_sk = false;
 
-        // if ((blockIdx.x == 0 ) && threadIdx.x == 0) 
+        // if ((blockIdx.x == 0 ) && threadIdx.x == 0)
         //   printf("\n");
       }
 
 
-      // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) 
+      // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
       //   printf("[SK-Advance] Bid: %d, is_sk: %d, block_iters_remaining: %d, sk_tile_work.tile_idx: %d, sk_tile_work.k_begin: %d, sk_tile_work.k_end: %d, sk_tile_work.k_iters_remaining: %d\n", blockIdx.x, is_sk, block_iters_remaining, this->sk_tile_work.tile_idx, this->sk_tile_work.k_begin, this->sk_tile_work.k_end, this->sk_tile_work.k_iters_remaining);
 
       this->sk_tile_idx-=1; // SK blocks consume their tiles in backwards order
