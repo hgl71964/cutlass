@@ -878,19 +878,23 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //}
     }
 
-    // init sk global-scope block extent
-    int block_iter_begin, block_iter_end, block_iters_remaining;
-    get_iter_extents(
-      block_idx,
-      sk_info.sk_iters_per_normal_block,
-      block_iter_begin,
-      block_iter_end);
-    block_iters_remaining = block_iter_end - block_iter_begin;
-    this->block_iter_begin = block_iter_begin;
-    this->block_iter_end = block_iter_end;
-    this->block_iters_remaining = block_iters_remaining;
+    if (this->is_sk) {
+      // init sk global-scope block extent
+      int block_iter_begin, block_iter_end, block_iters_remaining;
+      get_iter_extents(
+        block_idx,
+        sk_info.sk_iters_per_normal_block,
+        block_iter_begin,
+        block_iter_end);
+      block_iters_remaining = block_iter_end - block_iter_begin;
+      this->block_iter_begin = block_iter_begin;
+      this->block_iter_end = block_iter_end;
+      this->block_iters_remaining = block_iters_remaining;
 
-    this->sk_tile_work = TileWorkDesc{};
+      this->sk_tile_work = TileWorkDesc{};
+      this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->sk_runtime_ptr->iters_per_tile);
+    }
+
 
     // partials and barrier ptr
     {
@@ -914,7 +918,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //   }
       // }
     }
-    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->sk_runtime_ptr->iters_per_tile);
 
 
 
@@ -922,29 +925,31 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // dp related
     //
 
-    // iterations_per_block = (params_.tile_count - 1 + gridDim.x) / gridDim.x;
-    // block_load_start = iterations_per_block * block_idx;
+    if (!this->is_sk) {
+      // iterations_per_block = (params_.tile_count - 1 + gridDim.x) / gridDim.x;
+      // block_load_start = iterations_per_block * block_idx;
 
-    this->iterations_per_block = sk_info.entries_per_block;
-    //this->block_load_start = sk_info.entries_per_block * block_idx;
-    this->block_load_start = sk_info.entries_per_block * (block_idx-sk_info.sk_blocks);
+      this->iterations_per_block = sk_info.entries_per_block;
+      //this->block_load_start = sk_info.entries_per_block * block_idx;
+      this->block_load_start = sk_info.entries_per_block * (block_idx-sk_info.sk_blocks);
 
-    // advance to problem info ptr
-    {
-      this->problem_info_ptr = reinterpret_cast<ProblemInfo const*>(ptr);
+      // advance to problem info ptr
+      {
+        this->problem_info_ptr = reinterpret_cast<ProblemInfo const*>(ptr);
+      }
+
+
+      //if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
+
+      //  printf("[ProblemVisitor]: Bid: %d, tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", block_idx, params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
+
+      //  printf("\n");
+
+      //}
+
+      // Start prefetching the first set of tiles to compute
+      prefetch_tiles();
     }
-
-
-    //if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
-
-    //  printf("[ProblemVisitor]: Bid: %d, tile_count: %d, tiles_computed: %d, tile_idx: %d, problem_tile_start: %d, problem_idx: %d, iterations_per_block: %d, block_load_start: %d, kPrefetchTileCount: %d, kThreadCount: %d\n", block_idx, params_.tile_count, tiles_computed, this->tile_idx, this->problem_tile_start, this->problem_idx, iterations_per_block, block_load_start, kPrefetchTileCount, kThreadCount);
-
-    //  printf("\n");
-
-    //}
-
-    // Start prefetching the first set of tiles to compute
-    prefetch_tiles();
   }
 
 
@@ -1454,26 +1459,11 @@ public:
     if (this->is_sk) {
 
       this->block_iters_remaining -= this->sk_tile_work.k_iters_remaining;
-      if (this->block_iters_remaining == 0) {
+      // continue to next SK-work
+      this->sk_tile_idx-=1; // SK blocks consume their tiles in backwards order
 
-        // switch to dp
-        // this->tile_idx += this->sk_runtime_ptr->sk_tiles;
-        //this->is_sk = false;
-
-        // if ((blockIdx.x == 0 ) && threadIdx.x == 0)
-        //   printf("\n");
-        ;
-      } else {
-
-        // continue to next SK-work
-        this->sk_tile_idx-=1; // SK blocks consume their tiles in backwards order
-
-        // Continue to next tile; 
-        __syncthreads();
-      }
-
-      // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
-      //   printf("[SK-Advance] Bid: %d, is_sk: %d, block_iters_remaining: %d, sk_tile_work.tile_idx: %d, sk_tile_work.k_begin: %d, sk_tile_work.k_end: %d, sk_tile_work.k_iters_remaining: %d\n", blockIdx.x, is_sk, block_iters_remaining, this->sk_tile_work.tile_idx, this->sk_tile_work.k_begin, this->sk_tile_work.k_end, this->sk_tile_work.k_iters_remaining);
+      // Continue to next tile; 
+      __syncthreads();
 
     } else {
       //this->tile_idx += grid_size;
