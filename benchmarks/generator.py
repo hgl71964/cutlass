@@ -23,8 +23,8 @@ def parse_args():
 
 
 def divide_number_randomly(n, parts):
-    # Generate 7 random non-negative integers
-    numbers = [random.randint(1, n) for _ in range(parts)]
+    # Generate parts-1 random non-negative integers
+    numbers = [random.randint(1, n) for _ in range(parts - 1)]
 
     # Calculate the 8th number so that the sum of all numbers is n
     numbers.append(n - sum(numbers))
@@ -32,7 +32,7 @@ def divide_number_randomly(n, parts):
     # Check if any number is negative or if the 8th number is out of bounds
     # If so, recursively call the function until we get a valid set
     while min(numbers) < 0 or max(numbers) > n:
-        numbers = [random.randint(1, n) for _ in range(parts)]
+        numbers = [random.randint(1, n) for _ in range(parts - 1)]
         numbers.append(n - sum(numbers))
 
     return numbers

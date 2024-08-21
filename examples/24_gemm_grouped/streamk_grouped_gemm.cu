@@ -1040,14 +1040,17 @@ public:
       result.initialization_time_ms = duration.count();
     }
 
-    int64_t total_tiles = Gemm::group_tile_count(args);
-    std::cout << "    " << total_tiles << " total threadblock tiles." << std::endl;
+    if (this->options.iterations > 0) {
 
-    std::cout << std::endl;
-    std::cout << "    " << "Grouped Runtime: " << result.runtime_ms << " ms" << std::endl;
-    std::cout << "    " << "Grouped  GFLOPs: " << result.gflops << std::endl;
-    if (this->options.profile_initialization) {
-      std::cout << "    " << "Init    Runtime: " << result.initialization_time_ms << " ms" << std::endl;
+      int64_t total_tiles = Gemm::group_tile_count(args);
+      std::cout << "    " << total_tiles << " total threadblock tiles." << std::endl;
+
+      std::cout << std::endl;
+      std::cout << "    " << "Grouped Runtime: " << result.runtime_ms << " ms" << std::endl;
+      std::cout << "    " << "Grouped  GFLOPs: " << result.gflops << std::endl;
+      if (this->options.profile_initialization) {
+        std::cout << "    " << "Init    Runtime: " << result.initialization_time_ms << " ms" << std::endl;
+      }
     }
 
     // if (this->options.output_file.good()) {
