@@ -721,6 +721,9 @@ public:
 
     int accum_tile_offset = first_block_idx * kThreadCount;
 
+    //if ((block_idx==0||block_idx==1)&&thread_idx==0)
+    //  printf("[share_accumulators] Bid: %d, first_block_idx: %d, accum_tile_offset: %d\n", block_idx, first_block_idx, accum_tile_offset);
+
     if (block_idx == first_block_idx)
     {
       // First peer initializes the workspace partials
@@ -767,6 +770,9 @@ public:
     int thread_idx,
     int first_block_idx)
   {
+    //if ((block_idx==0||block_idx==1)&&thread_idx==0)
+    //  printf("[acquire_accumulators]: Bid: %d, first_block_idx: %d, num_carry_in: %d\n", block_idx, first_block_idx, block_idx - first_block_idx);
+
     //AccumulatorTile *accum_tile_workspace = reinterpret_cast<AccumulatorTile *>(params.partials_workspace);
     AccumulatorTile *accum_tile_workspace = reinterpret_cast<AccumulatorTile *>(problem_visitor.partials_ptr);
 

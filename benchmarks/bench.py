@@ -96,7 +96,7 @@ def main():
 
             assert (
                 len(gflops) == 3
-            ), f'Error: {gflops} \n\n {result.stdout} \n\n {result.stderr}'
+            ), f'Error: {gflops} \n\n {problem} \n\n {result.stdout} \n\n {result.stderr}'
             perf['device'].append(gflops[0])
             perf['precompute'].append(gflops[1])
             perf['streamk'].append(gflops[2])

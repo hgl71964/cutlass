@@ -1133,7 +1133,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         // XXX cannot use ColumnMajor for now!!!
         static_assert(!ProblemSizeHelper::kTransposed);
         int grid_shape_base = grid.n();
-        printf("[DEBUG]: p_idx=%d, problem has tiles=%d, grid_shape_m=%d grid_shape_n=%d, transpose=%d\n", p_idx, tiles, grid.m(), grid.n() , ProblemSizeHelper::kTransposed);
+        // printf("[DEBUG]: p_idx=%d, problem has tiles=%d, grid_shape_m=%d grid_shape_n=%d, transpose=%d\n", p_idx, tiles, grid.m(), grid.n() , ProblemSizeHelper::kTransposed);
 
         // ASSERT(p_idx==0);
 
@@ -1452,16 +1452,17 @@ public:
 
         // if ((blockIdx.x == 0 ) && threadIdx.x == 0)
         //   printf("\n");
-      }
+      } else {
 
+        // continue to next SK-work
+        this->sk_tile_idx-=1; // SK blocks consume their tiles in backwards order
+
+        // Continue to next tile; 
+        __syncthreads();
+      }
 
       // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
       //   printf("[SK-Advance] Bid: %d, is_sk: %d, block_iters_remaining: %d, sk_tile_work.tile_idx: %d, sk_tile_work.k_begin: %d, sk_tile_work.k_end: %d, sk_tile_work.k_iters_remaining: %d\n", blockIdx.x, is_sk, block_iters_remaining, this->sk_tile_work.tile_idx, this->sk_tile_work.k_begin, this->sk_tile_work.k_end, this->sk_tile_work.k_iters_remaining);
-
-      this->sk_tile_idx-=1; // SK blocks consume their tiles in backwards order
-
-      // Continue to next tile; XXX needed?
-      __syncthreads();
 
     } else {
       this->tile_idx += grid_size;
