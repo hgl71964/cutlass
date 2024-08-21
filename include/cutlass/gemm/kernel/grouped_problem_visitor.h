@@ -911,6 +911,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //   }
       // }
 
+    if ((block_idx == 0 || block_idx == 1 ) && threadIdx.x == 0)
+      printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
 
 
     //
@@ -947,9 +949,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
       init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
 
-      int block_idx = blockIdx.x;
-      if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
-        printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
+      // int block_idx = blockIdx.x;
+      // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
+      //   printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
 
       //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
 
