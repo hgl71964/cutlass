@@ -13,18 +13,22 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--topk', type=int, default=2)
 
-    parser.add_argument('-b', type=int, default=1, help='batch generate problem')
+    parser.add_argument('-b',
+                        type=int,
+                        default=1,
+                        help='batch generate problem')
 
     args = parser.parse_args()
     return args
 
+
 def divide_number_randomly(n, parts):
     # Generate 7 random non-negative integers
     numbers = [random.randint(1, n) for _ in range(parts)]
-    
+
     # Calculate the 8th number so that the sum of all numbers is n
     numbers.append(n - sum(numbers))
-    
+
     # Check if any number is negative or if the 8th number is out of bounds
     # If so, recursively call the function until we get a valid set
     while min(numbers) < 0 or max(numbers) > n:
@@ -32,6 +36,7 @@ def divide_number_randomly(n, parts):
         numbers.append(n - sum(numbers))
 
     return numbers
+
 
 def main():
     args = parse_args()

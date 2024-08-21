@@ -728,9 +728,6 @@ public:
     }
     else
     {
-
-      // TODO which strategy faster???
-
       // Subsequent peers atomically accumulate into the workspace partials
       //if (ThreadblockSwizzle::kReductionStrategy == ThreadblockSwizzle::kAtomic)
       //{
@@ -744,9 +741,14 @@ public:
       //  Barrier::wait_eq(params.barrier_workspace, thread_idx, first_block_idx, wait_count);
       //}
 
-      int wait_count = block_idx - first_block_idx;
-      //Barrier::wait_eq(params.barrier_workspace, thread_idx, first_block_idx, wait_count);
-      Barrier::wait_eq(problem_visitor.barrier_ptr, thread_idx, first_block_idx, wait_count);
+      // TODO which strategy faster???
+
+      // atomic
+      Barrier::wait_lt(problem_visitor.barrier_ptr, thread_idx, first_block_idx, 1);
+
+      // otherwise
+      // int wait_count = block_idx - first_block_idx;
+      // Barrier::wait_eq(problem_visitor.barrier_ptr, thread_idx, first_block_idx, wait_count);
 
       // Perform reduction in workspace
       BlockStripedReduceT::reduce(accum_tile_workspace + accum_tile_offset, accumulator_tile, thread_idx);
@@ -934,7 +936,7 @@ public:
     typename Epilogue::OutputTileIterator iterator_C(
         params_C,
         ptr_C,
-        //TODO params.block_mapping.problem_size.mn(),
+        //params.block_mapping.problem_size.mn(),
         params.problem_visitor.problem_sizes[problem_idx].mn(),
         thread_idx,
         threadblock_item_begin);
@@ -943,7 +945,7 @@ public:
     typename Epilogue::OutputTileIterator iterator_D(
         params_D,
         ptr_D,
-        //TODO params.block_mapping.problem_size.mn(),
+        //params.block_mapping.problem_size.mn(),
         params.problem_visitor.problem_sizes[problem_idx].mn(),
         thread_idx,
         threadblock_item_begin);

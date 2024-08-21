@@ -1153,7 +1153,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     ProblemInfo* host_problem_info_ptr = reinterpret_cast<ProblemInfo*>(ptr);
 
     //
-    // based on sk info, plan the rest dp blocks
+    // based on sk info, schedule the rest dp blocks
     //
 
     //// NOTE assign all to dp
