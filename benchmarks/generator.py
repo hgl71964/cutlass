@@ -23,20 +23,21 @@ def parse_args():
     return args
 
 
-def divide_number_randomly(n, parts):
-    # Generate parts-1 random non-negative integers
-    numbers = [random.randint(1, n) for _ in range(parts - 1)]
+def generate_random_partition(n, k=16):
+    if n < k:
+        raise ValueError("n must be greater than or equal to k")
 
-    # Calculate the 8th number so that the sum of all numbers is n
-    numbers.append(n - sum(numbers))
+    # Initialize the list with 1s
+    partition = [1] * k
 
-    # Check if any number is negative or if the 8th number is out of bounds
-    # If so, recursively call the function until we get a valid set
-    while min(numbers) < 0 or max(numbers) > n:
-        numbers = [random.randint(1, n) for _ in range(parts - 1)]
-        numbers.append(n - sum(numbers))
+    # Distribute the remaining n-k among the k bins
+    remaining = n - k
+    for _ in range(remaining):
+        # Randomly select a bin and increment it
+        bin_index = random.randint(0, k - 1)
+        partition[bin_index] += 1
 
-    return numbers
+    return partition
 
 
 def main():
@@ -47,7 +48,7 @@ def main():
     total = args.topk * args.m
 
     for pid in range(args.b):
-        ms = divide_number_randomly(total, args.e)
+        ms = generate_random_partition(total, args.e)
 
         text = ""
         for i, m in enumerate(ms):
