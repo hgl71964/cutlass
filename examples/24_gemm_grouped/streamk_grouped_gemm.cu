@@ -1141,7 +1141,7 @@ int main(int argc, char const **args) {
     ElementOutput, LayoutC,
     ElementAccumulator,
     cutlass::arch::OpClassTensorOp,
-    cutlass::arch::Sm80,
+    cutlass::arch::Sm80,            // https://github.com/NVIDIA/cutlass/issues/1181
     cutlass::gemm::GemmShape<128, 128, 32>,
     cutlass::gemm::GemmShape<64, 64, 32>,
     cutlass::gemm::GemmShape<16, 8, 16>,
