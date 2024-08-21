@@ -868,10 +868,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // if (block_idx == 0 && threadIdx.x == 0) {
     //   printf("[SK]: dp_start_block_idx: %d, dp_start_tile_idx: %d, sk_iters: %d\n", dp_start_block_idx, dp_start_tile_idx, this->sk_runtime_ptr->sk_iters_per_normal_block);
     // }
-    if (dp_start_block_idx > 0)
+    if (block_idx < dp_start_block_idx)
       this->is_sk = true;
-    else
+    else {
       this->is_sk = false;
+      this->tile_idx += sk_info.sk_tiles-sk_info.sk_blocks;
+      //if ((127<block_idx && block_idx<130) && threadIdx.x == 0) {
+      //  printf("[DP]: Bid: %d, tile_idx: %d\n", block_idx, this->tile_idx);
+      //}
+    }
 
     // init sk global-scope block extent
     int block_iter_begin, block_iter_end, block_iters_remaining;
@@ -921,7 +926,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // block_load_start = iterations_per_block * block_idx;
 
     this->iterations_per_block = sk_info.entries_per_block;
-    this->block_load_start = sk_info.entries_per_block * block_idx;
+    //this->block_load_start = sk_info.entries_per_block * block_idx;
+    this->block_load_start = sk_info.entries_per_block * (block_idx-sk_info.sk_blocks);
 
     // advance to problem info ptr
     {
@@ -947,15 +953,19 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     if (this->is_sk) {
       // NOTE: advance() will turn off sk flag
 
-      init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
+      if (this->block_iters_remaining > 0) {
+        init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
+        return true;
+      } else {
+        return false;
+      }
+
 
       // int block_idx = blockIdx.x;
       // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
       //   printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
 
       //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
-
-      return true;
     }
 
 
@@ -1447,11 +1457,12 @@ public:
       if (this->block_iters_remaining == 0) {
 
         // switch to dp
-        this->tile_idx += this->sk_runtime_ptr->sk_tiles;
-        this->is_sk = false;
+        // this->tile_idx += this->sk_runtime_ptr->sk_tiles;
+        //this->is_sk = false;
 
         // if ((blockIdx.x == 0 ) && threadIdx.x == 0)
         //   printf("\n");
+        ;
       } else {
 
         // continue to next SK-work
@@ -1465,7 +1476,8 @@ public:
       //   printf("[SK-Advance] Bid: %d, is_sk: %d, block_iters_remaining: %d, sk_tile_work.tile_idx: %d, sk_tile_work.k_begin: %d, sk_tile_work.k_end: %d, sk_tile_work.k_iters_remaining: %d\n", blockIdx.x, is_sk, block_iters_remaining, this->sk_tile_work.tile_idx, this->sk_tile_work.k_begin, this->sk_tile_work.k_end, this->sk_tile_work.k_iters_remaining);
 
     } else {
-      this->tile_idx += grid_size;
+      //this->tile_idx += grid_size;
+      this->tile_idx += grid_size - this->sk_runtime_ptr->sk_blocks;
     }
   }
 };

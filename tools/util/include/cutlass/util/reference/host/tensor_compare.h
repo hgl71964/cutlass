@@ -458,7 +458,7 @@ struct TensorEqualsWithCountFunc {
       coords.push_back(coord);
 
       // this may print a lot!!!
-      std::cout << "lhs  " << lhs_.signbit() << " " << lhs_.exponent() << " " << lhs_.mantissa()  << " != " << " rhs " << rhs_.signbit() << " " << rhs_.exponent() << " " << rhs_.mantissa() << " @ " << coord << std::endl;
+      //std::cout << "lhs  " << lhs_.signbit() << " " << lhs_.exponent() << " " << lhs_.mantissa()  << " != " << " rhs " << rhs_.signbit() << " " << rhs_.exponent() << " " << rhs_.mantissa() << " @ " << coord << std::endl;
 
       // std::cout << " " << coord;
     }

@@ -524,8 +524,13 @@ public:
       return Status::kSuccess;
     }
 
-    dim3 grid(params_.threadblock_count, 1, 1);
+    dim3 grid;
     dim3 block(BaseKernel::kThreadCount, 1, 1);
+    if constexpr (BaseKernel::kGroupScheduleMode == cutlass::gemm::kernel::GroupScheduleMode::mixedStreamK) {
+      grid = dim3(params_.threadblock_count*2, 1, 1);  // TODO for now hardcoded!
+    } else {
+      grid = dim3(params_.threadblock_count, 1, 1);  
+    }
 
     // std::cout << "grid: " << grid.x << " " << grid.y << " " << grid.z << std::endl;
     // std::cout << "block: " << block.x << " " << block.y << " " << block.z << std::endl;
