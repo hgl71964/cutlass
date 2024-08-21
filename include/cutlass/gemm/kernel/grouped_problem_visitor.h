@@ -911,8 +911,10 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //   }
       // }
 
+    //if ((block_idx == 0  ) && threadIdx.x == 0) // error
     if ((block_idx == 0 || block_idx == 1 ) && threadIdx.x == 0)
-      printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
+      // __nanosleep(1000000);  sleep for 1ms also gets error
+      printf("%d", block_idx);
 
 
     //
