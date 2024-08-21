@@ -42,6 +42,18 @@
 #include "cutlass/fast_math.h"
 #include "cutlass/barrier.h"
 
+#define cudaAssert(condition) \
+  if (!(condition)){ printf("Assertion %s failed!\n", #condition); asm("trap;"); }
+
+
+#define ASSERT(condition) do { \
+    if (!(condition)) { \
+        std::cerr << "Assertion failed: " #condition " at " \
+                  << __FILE__ << ":" << __LINE__ << std::endl; \
+        abort(); \
+    } \
+} while(0)
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -780,7 +792,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int m = this->tile_idx_offset_ptr[tile_idx].m;
     int n = this->tile_idx_offset_ptr[tile_idx].n;
     int problem_idx = this->tile_idx_offset_ptr[tile_idx].problem_idx;
-    assert(problem_idx==0);  // XXX assume sk all in first problems for now
+    cudaAssert(problem_idx==0);  // XXX assume sk all in first problems for now
     tile_work.tiled_coord = cutlass::gemm::GemmCoord(m, n, 0);
     tile_work.problem_idx = problem_idx;
   }
@@ -798,8 +810,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // assume num_region = 1
     this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
-    assert(region_idx == 0);
-    assert(iter_in_region == iter);
+    // assert(region_idx == 0);
+    // assert(iter_in_region == iter);
 
     // number of iterations in the region's normal blocks
     int normal_block_iters = iter_in_region - big_block_iters;
@@ -814,7 +826,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     //int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
     int owning_block_idx = block_idx_in_region;
-    assert(owning_block_idx == normal_block_idx_in_region);
+    cudaAssert(owning_block_idx == normal_block_idx_in_region);
 
     // if ((blockIdx.x < 3) && threadIdx.x == 0)
     //   printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
@@ -1119,9 +1131,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         int tiles = Base::tile_count(grid);
 
         // XXX cannot use ColumnMajor for now!!!
-        assert(ProblemSizeHelper::kTransposed == true);
+        static_assert(!ProblemSizeHelper::kTransposed);
         int grid_shape_base = grid.n();
-        // printf("[DEBUG]: p_idx=%d, tiles=%d, grid_shape_m=%d grid_shape_n=%d, transpose=%d\n", p_idx, tiles, grid.m(), grid.n() , ProblemSizeHelper::kTransposed);
+        printf("[DEBUG]: p_idx=%d, problem has tiles=%d, grid_shape_m=%d grid_shape_n=%d, transpose=%d\n", p_idx, tiles, grid.m(), grid.n() , ProblemSizeHelper::kTransposed);
+
+        // ASSERT(p_idx==0);
 
         for (int i = 0; i < tiles; ++i, ++tile_idx) {
 
@@ -1244,15 +1258,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int partial_wave_tiles = total_tiles - full_waves_tiles;
     if (partial_wave_tiles == 0) {
       // TODO Perfect quantization
-      assert(false);
+      ASSERT(false);
     }
     if (full_waves < sm_occupancy) {
       // cornor case: We're less than full GPU occupancy
-      assert(false);
+      ASSERT(false);
     }
     if (sm_occupancy > 1) {
       // ???
-      assert(false);
+      ASSERT(false);
     }
 
     dp_tiles = full_waves_tiles - num_sms;  // this gives 1 wave to sk
@@ -1312,7 +1326,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     }
     if (savings_iters < 0) {
       // not profitable; TODO apply a dp setting
-      assert(false);
+      ASSERT(false);
     }
 
 
@@ -1326,7 +1340,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_waves = -1;
     int sk_iters_per_region;
     int sk_blocks_per_region ;
-    assert(sk_blocks > 0);
+    ASSERT(sk_blocks > 0);
     {
       sk_waves = (sk_blocks + num_sms - 1) / num_sms;
       int sk_iters = sk_tiles * iters_per_tile;
@@ -1335,13 +1349,13 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       int extra_sk_iters = sk_iters - (sk_iters_per_normal_block * sk_blocks);
       int sk_big_blocks = extra_sk_iters;
       if (sk_big_blocks>0) {
-        assert(false && "a problem with sk big blocks");
+        ASSERT(false && "a problem with sk big blocks");
       }
 
       if ((sk_blocks > sk_tiles) && (sk_blocks % sk_tiles == 0)) {
         // // Split-K decomposition
         // sk_regions = sk_tiles;
-        assert(false);
+        ASSERT(false);
       }
 
       sk_blocks_per_region = sk_blocks / sk_regions;
@@ -1372,7 +1386,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // float cohort_efficiency = float(dp_blocks) / float(cohort_blocks);
 
     //
-    assert(dp_tiles % block_count == 0);  // <- perfect quantization!!!
+    ASSERT(dp_tiles % block_count == 0);  // <- perfect quantization!!!
     int entries_per_block = dp_tiles/block_count;
 
     skInfo sk_info = skInfo(
