@@ -789,7 +789,7 @@ public:
 
 
   CUTLASS_DEVICE
-  void sk_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage) {
+  void sk_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage, int warp_idx, int lane_idx, int thread_idx, int block_idx) {
     //
     // Initialize input iterators
     //
@@ -814,7 +814,7 @@ public:
       LayoutA(ldm_A),
       ptr_A,
       { m_end, tile_work.k_end },   // extend
-      threadIdx.x,
+      thread_idx,
       { m_begin, tile_work.k_begin }/* offset */);
 
     // B
@@ -828,7 +828,7 @@ public:
         LayoutB(ldm_B),
         ptr_B,
         { tile_work.k_end, n_end },
-        threadIdx.x,
+        thread_idx,
         { tile_work.k_begin, n_begin });
 
 
@@ -841,17 +841,10 @@ public:
     typename Mma::FragmentC accumulator_tile;
     accumulator_tile.clear();
 
-    // Broadcast the warp_id computed by lane 0 to ensure dependent code
-    // is compiled as warp-uniform.
-    int warp_idx = canonical_warp_idx_sync();
-    int lane_idx = threadIdx.x % 32;
-    int thread_idx = threadIdx.x;
-    int block_idx = blockIdx.x;
-
     // Initialize MMA abstraction
     Mma mma(
       shared_storage.kernel.main_loop,
-      threadIdx.x,
+      thread_idx,
       warp_idx,
       lane_idx);
 
@@ -973,7 +966,7 @@ public:
 
  
   CUTLASS_DEVICE
-  void dp_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage) {
+  void dp_work(ProblemVisitor const &problem_visitor, Params const &params, SharedStorage &shared_storage, int warp_idx, int lane_idx, int thread_idx, int block_idx) {
 
     //
     // These types shadow the type-level definitions and support the ability to implement
@@ -1018,9 +1011,6 @@ public:
         threadblock_offset.n()
       };
 
-      // Compute position within threadblock
-      int thread_idx = threadIdx.x;
-
       // Construct iterators to A and B operands
       typename Mma::IteratorA iterator_A(
         LayoutA(ldm_A),
@@ -1042,9 +1032,9 @@ public:
       
       // Broadcast the warp_id computed by lane 0 to ensure dependent code
       // is compiled as warp-uniform.
-      int warp_idx = canonical_warp_idx_sync();
+      // int warp_idx = canonical_warp_idx_sync();
 
-      int lane_idx = threadIdx.x % 32;
+      // int lane_idx = threadIdx.x % 32;
 
       //
       // Matrix multiply phase
@@ -1129,22 +1119,30 @@ public:
     using ElementC = typename Epilogue::OutputTileIterator::Element;
     using LayoutC = typename Epilogue::OutputTileIterator::Layout;
 
+    // Broadcast the warp_id computed by lane 0 to ensure dependent code
+    // is compiled as warp-uniform.
+    int warp_idx = canonical_warp_idx_sync();
+    int lane_idx = threadIdx.x % 32;
+    int thread_idx = threadIdx.x;
+    int block_idx = blockIdx.x;
+
+
     //
     // Problem visitor.
     //
     ProblemVisitor problem_visitor(
       params.problem_visitor,
       shared_storage.problem_visitor,
-      blockIdx.x);
+      block_idx);
 
 
     while (problem_visitor.next_tile()) {
 
 
       if (problem_visitor.is_sk)
-        sk_work(problem_visitor, params, shared_storage);
+        sk_work(problem_visitor, params, shared_storage, warp_idx, lane_idx, thread_idx, block_idx);
       else 
-        dp_work(problem_visitor, params, shared_storage);
+        dp_work(problem_visitor, params, shared_storage, warp_idx, lane_idx, thread_idx, block_idx);
 
       // dp_work(problem_visitor, params, shared_storage);
 

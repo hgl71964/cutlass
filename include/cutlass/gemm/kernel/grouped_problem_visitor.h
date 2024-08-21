@@ -540,7 +540,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int dp_blocks;
     int dp_tiles;
     int sk_blocks;
-    int sk_blocks_per_region;
+    //int sk_blocks_per_region;
     int sk_tiles;
     int sk_waves;
     int sk_iters_per_normal_block;
@@ -567,7 +567,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int dp_blocks,
     int dp_tiles,
     int sk_blocks,
-    int sk_blocks_per_region,
+    //int sk_blocks_per_region,
     int sk_tiles,
     int sk_waves,
     int sk_iters_per_normal_block,
@@ -590,7 +590,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,dp_blocks(dp_blocks)
         ,dp_tiles(dp_tiles)
         ,sk_blocks(sk_blocks)
-        ,sk_blocks_per_region(sk_blocks_per_region)
+        //,sk_blocks_per_region(sk_blocks_per_region)
         ,sk_tiles(sk_tiles)
         ,sk_waves(sk_waves)
         ,sk_iters_per_normal_block(sk_iters_per_normal_block)
@@ -627,7 +627,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   int32_t tiles_computed;
   int32_t iterations_per_block;
   int32_t block_load_start;
-  ProblemInfo const *problem_info_ptr;
+  ProblemInfo *problem_info_ptr;
 
   // shared
   SharedStorage &shared_storage;
@@ -635,8 +635,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   //
   // sk params
   //
-  TileIdxOffset const *tile_idx_offset_ptr;
-  skInfo const *sk_runtime_ptr;
+  TileIdxOffset *tile_idx_offset_ptr;
+  skInfo *sk_runtime_ptr;
 
   void *barrier_ptr;
   void *partials_ptr;
@@ -803,34 +803,39 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // global-scope
     int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile;
 
-    int region_idx = 0;
-    int iter_in_region = 0;
-    int sk_big_blocks_per_region = 0;
-    int big_block_iters = 0;
+    //////////// the following is simplified!!! /////////////////////
 
-    // assume num_region = 1
-    this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
-    // assert(region_idx == 0);
-    // assert(iter_in_region == iter);
+    //int region_idx = 0;
+    //int iter_in_region = 0;
+    //int sk_big_blocks_per_region = 0;
+    //int big_block_iters = 0;
 
-    // number of iterations in the region's normal blocks
-    int normal_block_iters = iter_in_region - big_block_iters;
+    //// assume num_region = 1
+    //this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
+    //// assert(region_idx == 0);
+    //// assert(iter_in_region == iter);
 
-    int big_block_idx_in_region = this->sk_runtime_ptr->div_mod_sk_iters_per_big_block.div(iter_in_region);
-    int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_ptr->div_mod_sk_iters_per_normal_block.div(normal_block_iters);
+    //// number of iterations in the region's normal blocks
+    //int normal_block_iters = iter_in_region - big_block_iters;
+
+    //int big_block_idx_in_region = this->sk_runtime_ptr->div_mod_sk_iters_per_big_block.div(iter_in_region);
+    //int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_ptr->div_mod_sk_iters_per_normal_block.div(normal_block_iters);
 
 
-    int block_idx_in_region = (big_block_idx_in_region < sk_big_blocks_per_region) ?
-        big_block_idx_in_region :
-        normal_block_idx_in_region;
+    //int block_idx_in_region = (big_block_idx_in_region < sk_big_blocks_per_region) ?
+    //    big_block_idx_in_region :
+    //    normal_block_idx_in_region;
 
-    //int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
-    int owning_block_idx = block_idx_in_region;
-    cudaAssert(owning_block_idx == normal_block_idx_in_region);
+    ////int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
+    //int owning_block_idx = block_idx_in_region;
+    //cudaAssert(owning_block_idx == normal_block_idx_in_region);
+
 
     // if ((blockIdx.x < 3) && threadIdx.x == 0)
     //   printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
+    //////////// the above is simplified!!! /////////////////////
 
+    int owning_block_idx = iter/this->sk_runtime_ptr->sk_iters_per_normal_block;
     return owning_block_idx;
   }
 
@@ -886,21 +891,18 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->block_iters_remaining = block_iters_remaining;
 
     this->sk_tile_work = TileWorkDesc{};
+    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, sk_info.iters_per_tile);
 
     // partials and barrier ptr
-    {
-      this->partials_ptr = ptr;
-      ptr+=sk_info.partials_workspace_bytes;
+    this->partials_ptr = ptr;
+    ptr+=sk_info.partials_workspace_bytes;
 
-      this->barrier_ptr = ptr;
-      ptr+=sk_info.barrier_workspace_bytes;
-
-    }
+    this->barrier_ptr = ptr;
+    ptr+=sk_info.barrier_workspace_bytes;
 
     // tile offset ptr
-    {
-      this->tile_idx_offset_ptr = reinterpret_cast<TileIdxOffset const*>(ptr);
-      ptr+=sk_info.sk_tiles * sizeof(TileIdxOffset);
+    this->tile_idx_offset_ptr = reinterpret_cast<TileIdxOffset *>(ptr);
+    ptr+=sk_info.sk_tiles * sizeof(TileIdxOffset);
 
       // //sanity check
       // if (block_idx == 0 && threadIdx.x == 0) {
@@ -908,8 +910,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //     printf("[Check-SK-Schedule] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].problem_idx, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n);
       //   }
       // }
-    }
-    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, this->sk_runtime_ptr->iters_per_tile);
 
 
 
@@ -924,9 +924,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->block_load_start = sk_info.entries_per_block * block_idx;
 
     // advance to problem info ptr
-    {
-      this->problem_info_ptr = reinterpret_cast<ProblemInfo const*>(ptr);
-    }
+    this->problem_info_ptr = reinterpret_cast<ProblemInfo *>(ptr);
 
 
     //if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0) {
@@ -949,9 +947,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
       init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
 
-      // int block_idx = blockIdx.x;
-      // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
-      //   printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
+      int block_idx = blockIdx.x;
+      if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
+        printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
 
       //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
 
@@ -1339,7 +1337,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // bool remap_block_indices = false;
     int sk_waves = -1;
     int sk_iters_per_region;
-    int sk_blocks_per_region ;
+    //int sk_blocks_per_region ;
     ASSERT(sk_blocks > 0);
     {
       sk_waves = (sk_blocks + num_sms - 1) / num_sms;
@@ -1358,7 +1356,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ASSERT(false);
       }
 
-      sk_blocks_per_region = sk_blocks / sk_regions;
+      //sk_blocks_per_region = sk_blocks / sk_regions;
       // int sk_big_blocks_per_region = sk_big_blocks / sk_regions;
       sk_iters_per_region = sk_iters / sk_regions;
     }
@@ -1394,7 +1392,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          dp_blocks,
          dp_tiles,
          sk_blocks,
-         sk_blocks_per_region,
+         //sk_blocks_per_region,
          sk_tiles,
          sk_waves,
          sk_iters_per_normal_block,
@@ -1410,6 +1408,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          //
          0,
          0,
+         //
          entries_per_block
     );
     if (verbose)
