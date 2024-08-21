@@ -1,6 +1,7 @@
 import os
 import random
 import argparse
+import random
 
 
 def parse_args():
@@ -40,6 +41,7 @@ def divide_number_randomly(n, parts):
 
 def main():
     args = parse_args()
+    random.seed(args.seed)
 
     n, k = args.n, args.k
     total = args.topk * args.m

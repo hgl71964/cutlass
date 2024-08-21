@@ -24,7 +24,7 @@ def process_path(path: str):
 
     # Check if it's a directory
     if os.path.isdir(path):
-        print(f"Listing files in directory: {path}")
+        print(f"Solve problems in directory: {path}")
         for filename in os.listdir(path):
             file_path = os.path.join(path, filename)
             if os.path.isfile(file_path):
