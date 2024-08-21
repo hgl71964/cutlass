@@ -792,7 +792,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int m = this->tile_idx_offset_ptr[tile_idx].m;
     int n = this->tile_idx_offset_ptr[tile_idx].n;
     int problem_idx = this->tile_idx_offset_ptr[tile_idx].problem_idx;
-    cudaAssert(problem_idx==0);  // XXX assume sk all in first problems for now
+    // cudaAssert(problem_idx==0);  
     tile_work.tiled_coord = cutlass::gemm::GemmCoord(m, n, 0);
     tile_work.problem_idx = problem_idx;
   }
@@ -905,7 +905,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       // //sanity check
       // if (block_idx == 0 && threadIdx.x == 0) {
       //   for (int i = 0; i < sk_info.sk_tiles; i++) {
-      //     printf("[Check-SK-Schedule] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n, this->tile_idx_offset_ptr[i].problem_idx);
+      //     printf("[Check-SK-Schedule] tile_idx_offset_ptr[%d] = (%d, %d, %d)\n", i, this->tile_idx_offset_ptr[i].problem_idx, this->tile_idx_offset_ptr[i].m, this->tile_idx_offset_ptr[i].n);
       //   }
       // }
     }

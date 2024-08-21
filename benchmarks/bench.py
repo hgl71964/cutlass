@@ -54,9 +54,9 @@ def get_gflops(output: str):
         gflops.append(int(match))
 
     ### Print the output (stdout)
-    print("Standard Output:")
-    print(output)
-    print(gflops)
+    # print("Standard Output:")
+    # print(output)
+    # print(gflops)
 
     return gflops
 
@@ -94,7 +94,9 @@ def main():
 
             gflops = get_gflops(result.stdout)
 
-            assert (len(gflops) == 3)
+            assert (
+                len(gflops) == 3
+            ), f'Error: {gflops} \n\n {result.stdout} \n\n {result.stderr}'
             perf['device'].append(gflops[0])
             perf['precompute'].append(gflops[1])
             perf['streamk'].append(gflops[2])

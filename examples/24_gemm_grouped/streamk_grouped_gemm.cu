@@ -947,11 +947,13 @@ public:
     //
     // Warm-up run of the grouped GEMM object
     //
-    result.status = gemm.run();
+    if (this->options.iterations > 0) {
+      result.status = gemm.run();
 
-    if (result.status != cutlass::Status::kSuccess) {
-      std::cerr << "Failed to run CUTLASS Grouped GEMM kernel." << std::endl;
-      return result;
+      if (result.status != cutlass::Status::kSuccess) {
+        std::cerr << "Failed to run CUTLASS Grouped GEMM kernel." << std::endl;
+        return result;
+      }
     }
 
     //
