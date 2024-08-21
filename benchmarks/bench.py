@@ -112,7 +112,9 @@ def main():
 
         except subprocess.CalledProcessError as e:
             # Handle the case where the command returns a non-zero exit code
-            print(f"An error occurred while running the command: {e}")
+            print(
+                f"An error occurred while running the command: {e} \n\n {e.cmd} \n\n {e.stderr} \n\n {e.stdout}"
+            )
             raise e
 
     # normalized gflops

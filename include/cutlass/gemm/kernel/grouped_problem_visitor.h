@@ -1255,12 +1255,14 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //
     // get_blocks
     //
+    bool dp_only = false;
     int full_waves = total_tiles / num_sms;
     int full_waves_tiles = full_waves * num_sms;
     int partial_wave_tiles = total_tiles - full_waves_tiles;
     if (partial_wave_tiles == 0) {
-      // TODO Perfect quantization
-      ASSERT(false);
+      // Perfect quantization
+      // ASSERT(false);
+      dp_only=true;
     }
     if (full_waves < sm_occupancy) {
       // cornor case: We're less than full GPU occupancy
@@ -1328,7 +1330,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     }
     if (savings_iters < 0) {
       // not profitable; TODO apply a dp setting
-      ASSERT(false);
+      // ASSERT(false);
+      dp_only = true;
     }
 
 
@@ -1376,6 +1379,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //
 
     int dp_blocks = dp_tiles;
+    int entries_per_block = dp_tiles/block_count;
     // GemmCoord tiled_shape(
     //   (first_problem.m() + thread_block_shape.m() - 1) / thread_block_shape.m(),
     //   (first_problem.n() + thread_block_shape.n() - 1) / thread_block_shape.n(),
@@ -1387,9 +1391,20 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // int cohort_blocks = (tiled_cohort_shape.m() * tiled_cohort_shape.n()) * kCtasPerCohort;
     // float cohort_efficiency = float(dp_blocks) / float(cohort_blocks);
 
+    if (dp_only) {
+      // overwrite all sk setting
+      sk_regions = 0;
+      dp_blocks = total_tiles;
+      dp_tiles = total_tiles;     
+      sk_blocks = 0;
+      sk_tiles = 0;
+      sk_waves = 0;
+      sk_iters_per_normal_block = 0;
+      entries_per_block = dp_tiles/block_count;
+    }
+
     //
     ASSERT(dp_tiles % block_count == 0);  // <- perfect quantization!!!
-    int entries_per_block = dp_tiles/block_count;
 
     skInfo sk_info = skInfo(
          sk_regions,
@@ -1416,7 +1431,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          entries_per_block
     );
     if (verbose)
-      std::cout << "sk regions: " << sk_info.sk_regions << ", dp blocks: " << sk_info.dp_blocks << ", dp tiles: " << sk_info.dp_tiles << ", sk blocks: " << sk_info.sk_blocks << ", sk tiles: " << sk_info.sk_tiles << ", sk_waves: " << sk_info.sk_waves <<  std::endl;
+      std::cout << "dp_only: " << dp_only << ", sk regions: " << sk_info.sk_regions << ", dp blocks: " << sk_info.dp_blocks << ", dp tiles: " << sk_info.dp_tiles << ", sk blocks: " << sk_info.sk_blocks << ", sk tiles: " << sk_info.sk_tiles << ", sk_waves: " << sk_info.sk_waves <<  std::endl;
     return sk_info;
   }
 
