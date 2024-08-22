@@ -51,6 +51,8 @@
 #include "cutlass/block_striped.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+#define cudaAssert(condition) \
+  if (!(condition)){ printf("Assertion %s failed!\n", #condition); asm("trap;"); }
 
 namespace cutlass {
 namespace gemm {
@@ -745,13 +747,14 @@ public:
       //}
 
       // TODO which strategy faster???
-
+      //printf("Bid: %d, first_block_idx: %d\n", blockIdx.x, first_block_idx);
+      //cudaAssert(false);
       //// atomic
-      // Barrier::wait_lt(problem_visitor.barrier_ptr, thread_idx, first_block_idx, 1);
+      Barrier::wait_lt(problem_visitor.barrier_ptr, thread_idx, first_block_idx, 1);
 
-      //// otherwise
-      int wait_count = block_idx - first_block_idx;
-      Barrier::wait_eq(problem_visitor.barrier_ptr, thread_idx, first_block_idx, wait_count);
+      //// otherwise (this is default...)
+      // int wait_count = block_idx - first_block_idx;
+      // Barrier::wait_eq(problem_visitor.barrier_ptr, thread_idx, first_block_idx, wait_count);
 
       // Perform reduction in workspace
       BlockStripedReduceT::reduce(accum_tile_workspace + accum_tile_offset, accumulator_tile, thread_idx);
