@@ -1447,11 +1447,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       sk_tiles = 0;
       sk_waves = 0;
       sk_iters_per_normal_block = 0;
-      entries_per_block = dp_tiles/block_count;
+      entries_per_block = (total_tiles - 1 + block_count) / block_count;
     }
 
     //
-    ASSERT(dp_tiles % block_count == 0);  // <- perfect quantization!!!
+    //ASSERT(dp_tiles % block_count == 0);  // <- perfect quantization!!!
+    if (dp_tiles % block_count != 0) {
+      ASSERT(dp_only);
+      std::cout << "[Reset to dp]: dp_only: " << dp_only << ", dp_tiles: " << dp_tiles << ", block_count: " << block_count << ", dp_efficiency: " << dp_efficiency << ", score: " << score << std::endl;
+    }
 
     skInfo sk_info = skInfo(
          sk_regions,
