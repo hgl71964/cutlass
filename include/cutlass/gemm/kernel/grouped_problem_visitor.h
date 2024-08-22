@@ -806,12 +806,10 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // global-scope
     int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile;
 
-    //////////// the following is simplified!!! /////////////////////
-
+    // assume num_region = 1
     int region_idx = 0;
     int iter_in_region = 0;
     this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
-    // assume num_region = 1
     // assert(region_idx == 0);
     // assert(iter_in_region == iter);
     int sk_big_blocks_per_region = this->sk_runtime_ptr->sk_big_blocks_per_region;
@@ -832,14 +830,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
     int owning_block_idx = block_idx_in_region;
 
-    //if ((blockIdx.x < 3) && threadIdx.x == 0)
-    //  printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
-    //////////// the above is simplified!!! /////////////////////
-
-    // int owning_block_idx = iter/this->sk_runtime_ptr->sk_iters_per_normal_block;
-    // //if ((blockIdx.x < 3) && threadIdx.x == 0)
-    // if ((blockIdx.x == 107) && threadIdx.x == 0)
-    //   printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, owning_block_idx: %d\n", blockIdx.x, iter, owning_block_idx);
+    // if ((blockIdx.x < 3) && threadIdx.x == 0)
+    //   printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
 
     return owning_block_idx;
   }
@@ -922,7 +914,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     //if ((block_idx == 0  ) && threadIdx.x == 0) // error
     //if ((block_idx == 0 || block_idx == 1 ) && threadIdx.x == 0)
-    //  // __nanosleep(1000000);  sleep for 1ms also gets error
+    ////  // __nanosleep(1000000);  sleep for 1ms also gets error
     //  printf("%d", block_idx);
 
 
@@ -1342,7 +1334,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       dp_only=true;
     }
     if (full_waves < sm_occupancy) {
-      // cornor case: We're less than full GPU occupancy
+      // TODO cornor case: We're less than full GPU occupancy
       ASSERT(false);
     }
     if ((sm_occupancy > 1 ) && (full_waves % sm_occupancy == sm_occupancy - 1)) {
@@ -1359,6 +1351,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //  max_sk_occupancy,
       //  true);                 // we can run with less than a full wave of SK-blocks
 
+      // TODO
       std::cout << "[warning] just skip for now... (should be affecting A100)" << std::endl;
 
       // if (score >= 0)
@@ -1376,58 +1369,11 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         iters_per_tile,
         num_sms,
         max_sk_occupancy,
-        false,
-        verbose);                 // we cannot run with less than a full wave of SK-blocks
-      //int sk_tiles = partial_wave_tiles + num_sms;
-      //int sk_iters = sk_tiles * iters_per_tile;
+        false, // we cannot run with less than a full wave of SK-blocks
+        verbose);                 
 
-      //int dp_equiv_waves = (sk_tiles + num_sms - 1) / num_sms;
-      //int dp_equiv_iters = iters_per_tile * dp_equiv_waves;
-
-      //int min_sk_blocks = fast_min(num_sms, sk_tiles + 1);
-      //int max_sk_blocks = fast_min(num_sms * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
-
-      //if (verbose)
-      //  std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
-
-      //// Number of thread blocks to produce the remaining SK tiles
-      //int savings_iters = INT_MIN;
-      //{
-      //  // heuristic for picking sk_blocks
-      //  for (int trial_sk_blocks = min_sk_blocks; trial_sk_blocks <= max_sk_blocks; ++trial_sk_blocks) {
-      //    int sk_waves = (trial_sk_blocks + num_sms - 1) / num_sms;
-
-      //    int max_sk_iters_per_block = (sk_iters + trial_sk_blocks - 1) / trial_sk_blocks;
-      //    int sk_iter_equiv = max_sk_iters_per_block * sk_waves;
-
-      //    int num_peers = ((trial_sk_blocks + sk_tiles - 1) / sk_tiles) + 1;        // add one for alignment skew
-
-      //    float iter_cost = 0.02f * float(num_peers) * float(sk_iter_equiv);
-
-      //    if (trial_sk_blocks % sk_tiles == 0)
-      //    {
-      //      // aligned
-      //      num_peers = (trial_sk_blocks / sk_tiles);
-
-      //      iter_cost = 0.0f;
-      //    }
-
-      //    float peer_cost = 2.0f * float(num_peers);
-
-      //    float base_cost = 2.0f * float(sk_waves);
-
-      //    int fixup_iter_equiv = int(base_cost + iter_cost + peer_cost);
-
-      //    int trial_savings_iters = dp_equiv_iters - sk_iter_equiv - fixup_iter_equiv;
-
-      //    if (trial_savings_iters >= savings_iters) {
-      //        savings_iters = trial_savings_iters;
-      //        sk_blocks = trial_sk_blocks;
-      //    }
-      //  }
-      //}
       if (score < 0) {
-        // not profitable; TODO apply a dp setting
+        // not profitable; apply a dp setting
         // ASSERT(false);
         dp_only = true;
       }
@@ -1533,7 +1479,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          entries_per_block
     );
     if (verbose)
-      std::cout << "dp_only: " << dp_only << ", sk regions: " << sk_info.sk_regions << ", dp blocks: " << sk_info.dp_blocks << ", dp tiles: " << sk_info.dp_tiles << ", sk blocks: " << sk_info.sk_blocks << ", sk tiles: " << sk_info.sk_tiles << ", sk_waves: " << sk_info.sk_waves << ", sk_iters_per_normal_block" << sk_big_blocks_per_region << ", sk_big_blocks_per_region" << sk_big_blocks_per_region <<  std::endl;
+      std::cout << "dp_only: " << dp_only << ", sk regions: " << sk_info.sk_regions << ", dp blocks: " << sk_info.dp_blocks << ", dp tiles: " << sk_info.dp_tiles << ", sk blocks: " << sk_info.sk_blocks << ", sk tiles: " << sk_info.sk_tiles << ", sk_waves: " << sk_info.sk_waves << ", sk_iters_per_normal_block: " << sk_big_blocks_per_region << ", sk_big_blocks_per_region: " << sk_big_blocks_per_region <<  std::endl;
     return sk_info;
   }
 
@@ -1580,9 +1526,6 @@ public:
         // Continue to next tile; 
         __syncthreads();
       }
-
-      // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
-      //   printf("[SK-Advance] Bid: %d, is_sk: %d, block_iters_remaining: %d, sk_tile_work.tile_idx: %d, sk_tile_work.k_begin: %d, sk_tile_work.k_end: %d, sk_tile_work.k_iters_remaining: %d\n", blockIdx.x, is_sk, block_iters_remaining, this->sk_tile_work.tile_idx, this->sk_tile_work.k_begin, this->sk_tile_work.k_end, this->sk_tile_work.k_iters_remaining);
 
     } else {
       this->tile_idx += grid_size;
