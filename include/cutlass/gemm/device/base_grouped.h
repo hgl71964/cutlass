@@ -154,7 +154,7 @@ private:
 
   Status precompute_streamk(Arguments const &args, int32_t tile_count, void* workspace) {
     size_t workspace_bytes = get_workspace_size(args);
-    std::vector<uint8_t> host_workspace(workspace_bytes);
+    std::vector<uint8_t> host_workspace(workspace_bytes, 0);
 
     // gh512
     int device_idx;

@@ -912,9 +912,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       // }
 
     //if ((block_idx == 0  ) && threadIdx.x == 0) // error
-    if ((block_idx == 0 || block_idx == 1 ) && threadIdx.x == 0)
-      // __nanosleep(1000000);  sleep for 1ms also gets error
-      printf("%d", block_idx);
+    //if ((block_idx == 0 || block_idx == 1 ) && threadIdx.x == 0)
+    //  // __nanosleep(1000000);  sleep for 1ms also gets error
+    //  printf("%d", block_idx);
 
 
     //
@@ -1107,12 +1107,16 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //uint8_t *partials_workspace = ptr;  // unused
       ptr += partials_workspace_bytes;
 
-      uint8_t* barrier_workspace = ptr;
-      cudaError_t result = cudaMemsetAsync(
-        barrier_workspace,
-        0,
-        barrier_workspace_bytes,
-        nullptr);
+      //void* barrier_workspace = ptr;
+      //memset(
+      //  barrier_workspace,
+      //  0,
+      //  barrier_workspace_bytes);
+      //int* iptr = (int*)ptr; // We tell the compiler that the values at the end of the pointer should be interpreted as integers
+      //for(int i = 0; i < barrier_workspace_bytes; i++) {
+      //  std::cout << i << " ";
+      //  ASSERT(iptr[i] == 0);
+      //}
       ptr += barrier_workspace_bytes;
     }
 
