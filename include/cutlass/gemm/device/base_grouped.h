@@ -411,6 +411,12 @@ public:
     auto res = std::min(total_tiles, occupancy_based_block_count);
     std::cout << "threadblock count: " << res << std::endl;
 
+    if (res > multiprocessor_count) {
+      // hack for A100
+      std::cout << "[Warning] resetting thread block count to nums of SMs" << std::endl;
+      res = multiprocessor_count;
+    }
+
 
     // for moe, we ensure each only m dimension varies
     int K = -1;

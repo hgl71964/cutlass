@@ -544,6 +544,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_tiles;
     int sk_waves;
     int sk_iters_per_normal_block;
+    int sk_big_blocks_per_region;
     int iters_per_tile;
     int problem_size_k;
     int mma_shape_k;
@@ -571,6 +572,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int sk_tiles,
     int sk_waves,
     int sk_iters_per_normal_block,
+    int sk_big_blocks_per_region,
     int iters_per_tile,
     int problem_size_k,
     int mma_shape_k,
@@ -594,6 +596,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,sk_tiles(sk_tiles)
         ,sk_waves(sk_waves)
         ,sk_iters_per_normal_block(sk_iters_per_normal_block)
+        ,sk_big_blocks_per_region(sk_big_blocks_per_region)
         ,iters_per_tile(iters_per_tile)
         ,problem_size_k(problem_size_k)
         ,mma_shape_k(mma_shape_k)
@@ -711,7 +714,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   {
     int block_idx_in_region = sk_block_idx;
     //int region_idx = 0;
-    int sk_big_blocks_per_region = 0;
+    int sk_big_blocks_per_region = this->sk_runtime_ptr->sk_big_blocks_per_region;
 
     // only one region
     //assert(region_idx == 0);
@@ -805,37 +808,39 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     //////////// the following is simplified!!! /////////////////////
 
-    //int region_idx = 0;
-    //int iter_in_region = 0;
-    //int sk_big_blocks_per_region = 0;
-    //int big_block_iters = 0;
+    int region_idx = 0;
+    int iter_in_region = 0;
+    this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
+    // assume num_region = 1
+    // assert(region_idx == 0);
+    // assert(iter_in_region == iter);
+    int sk_big_blocks_per_region = this->sk_runtime_ptr->sk_big_blocks_per_region;
 
-    //// assume num_region = 1
-    //this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
-    //// assert(region_idx == 0);
-    //// assert(iter_in_region == iter);
+    // number of iterations in the region's big blocks
+    int big_block_iters = (sk_big_blocks_per_region * this->sk_runtime_ptr->sk_iters_per_normal_block) + sk_big_blocks_per_region;   
+    // number of iterations in the region's normal blocks
+    int normal_block_iters = iter_in_region - big_block_iters; 
 
-    //// number of iterations in the region's normal blocks
-    //int normal_block_iters = iter_in_region - big_block_iters;
-
-    //int big_block_idx_in_region = this->sk_runtime_ptr->div_mod_sk_iters_per_big_block.div(iter_in_region);
-    //int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_ptr->div_mod_sk_iters_per_normal_block.div(normal_block_iters);
-
-
-    //int block_idx_in_region = (big_block_idx_in_region < sk_big_blocks_per_region) ?
-    //    big_block_idx_in_region :
-    //    normal_block_idx_in_region;
-
-    ////int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
-    //int owning_block_idx = block_idx_in_region;
-    //cudaAssert(owning_block_idx == normal_block_idx_in_region);
+    int big_block_idx_in_region = this->sk_runtime_ptr->div_mod_sk_iters_per_big_block.div(iter_in_region);
+    int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_ptr->div_mod_sk_iters_per_normal_block.div(normal_block_iters);
 
 
-    // if ((blockIdx.x < 3) && threadIdx.x == 0)
-    //   printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
+    int block_idx_in_region = (big_block_idx_in_region < sk_big_blocks_per_region) ?
+        big_block_idx_in_region :
+        normal_block_idx_in_region;
+
+    //int owning_block_idx = (sk_blocks_per_region() * region_idx) + block_idx_in_region;
+    int owning_block_idx = block_idx_in_region;
+
+    //if ((blockIdx.x < 3) && threadIdx.x == 0)
+    //  printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, iter_in_region: %d, big_block_iters: %d, normal_block_iters: %d, big_block_idx_in_region: %d, normal_block_idx_in_region: %d, block_idx_in_region: %d, owning_block_idx: %d\n", blockIdx.x, iter, iter_in_region, big_block_iters, normal_block_iters, big_block_idx_in_region, normal_block_idx_in_region, block_idx_in_region, owning_block_idx);
     //////////// the above is simplified!!! /////////////////////
 
-    int owning_block_idx = iter/this->sk_runtime_ptr->sk_iters_per_normal_block;
+    // int owning_block_idx = iter/this->sk_runtime_ptr->sk_iters_per_normal_block;
+    // //if ((blockIdx.x < 3) && threadIdx.x == 0)
+    // if ((blockIdx.x == 107) && threadIdx.x == 0)
+    //   printf("[Get First SK BLOCK]: blockIdx.x: %d, iter: %d, owning_block_idx: %d\n", blockIdx.x, iter, owning_block_idx);
+
     return owning_block_idx;
   }
 
@@ -889,6 +894,10 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     this->block_iter_begin = block_iter_begin;
     this->block_iter_end = block_iter_end;
     this->block_iters_remaining = block_iters_remaining;
+
+    // if (block_idx==107 && threadIdx.x==0) {
+    //   printf("[Check-block-iters] block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d\n", block_iter_begin, block_iter_end, block_iters_remaining);
+    // }
 
     this->sk_tile_work = TileWorkDesc{};
     this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, sk_info.iters_per_tile);
@@ -951,9 +960,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
       init_sk_tile_work(this->sk_tile_work, this->sk_tile_idx, this->block_iter_begin, this->block_iter_begin + this->block_iters_remaining);
 
-      // int block_idx = blockIdx.x;
-      // if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
-      //   printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
+      //int block_idx = blockIdx.x;
+      //if ((block_idx == 0 || block_idx == 1 || block_idx==127) && threadIdx.x == 0)
+      //  printf("[SK-Next]: Bid: %d, block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d, sk_tile_idx: %d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iter_remaining: %d, tile_work.k_end: %d\n", block_idx, this->block_iter_begin, this->block_iter_end, this->block_iters_remaining, this->sk_tile_idx, this->sk_tile_work.iter_begin, this->sk_tile_work.k_begin, this->sk_tile_work.k_iters_remaining, this->sk_tile_work.k_end);
 
       //if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0)
 
@@ -1230,6 +1239,68 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
                               int32_t block_count,
                               void* host_workspace_ptr) { assert(false);}
 
+  // Compute sk_blocks to dispatch for a given number of sk_tiles
+  static void get_sk_blocks(
+    int &sk_blocks,     /// [out]
+    int &savings_iters, /// [out]
+    int sk_tiles,
+    int iters_per_tile,
+    int avail_sms,
+    int max_sk_occupancy,
+    bool allow_partial_wave,
+    bool verbose)
+  {
+    savings_iters = INT_MIN;
+    sk_blocks = 0;
+
+    if (sk_tiles == 0) {
+      return;
+    }
+
+    int sk_iters = sk_tiles * iters_per_tile;
+
+    int dp_equiv_waves = (sk_tiles + avail_sms - 1) / avail_sms;
+    int dp_equiv_iters = iters_per_tile * dp_equiv_waves;
+
+    int min_sk_blocks = (allow_partial_wave) ? fast_min(avail_sms, sk_tiles + 1) : avail_sms;
+    int max_sk_blocks = fast_min(avail_sms * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
+
+    if (verbose)
+      std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
+
+    for (int trial_sk_blocks = min_sk_blocks; trial_sk_blocks <= max_sk_blocks; ++trial_sk_blocks)
+    {
+      int sk_waves = (trial_sk_blocks + avail_sms - 1) / avail_sms;
+      int max_sk_iters_per_block = (sk_iters + trial_sk_blocks - 1) / trial_sk_blocks;
+      int sk_iter_equiv = max_sk_iters_per_block * sk_waves;
+
+      int num_peers = ((trial_sk_blocks + sk_tiles - 1) / sk_tiles) + 1;        // add one for alignment skew
+
+      float iter_cost = 0.02f * float(num_peers) * float(sk_iter_equiv);
+
+      if (trial_sk_blocks % sk_tiles == 0)
+      {
+        // aligned
+        num_peers = (trial_sk_blocks / sk_tiles);
+
+        iter_cost = 0.0f;
+      }
+
+      float peer_cost = 2.0f * float(num_peers);
+
+      float base_cost = 2.0f * float(sk_waves);
+
+      int fixup_iter_equiv = int(base_cost + iter_cost + peer_cost);
+
+      int trial_savings_iters = dp_equiv_iters - sk_iter_equiv - fixup_iter_equiv;
+
+      if (trial_savings_iters >= savings_iters) {
+          savings_iters = trial_savings_iters;
+          sk_blocks = trial_sk_blocks;
+      }
+    }
+  }
+
   static skInfo plan_sk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
                               int32_t problem_count,
                               int num_sms,
@@ -1255,6 +1326,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // Start with a DP-only configuration
     int dp_tiles = total_tiles;     // Number of data-parallel tiles
+    int sk_blocks = 0;
 
     //
     // get_blocks
@@ -1263,6 +1335,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int full_waves = total_tiles / num_sms;
     int full_waves_tiles = full_waves * num_sms;
     int partial_wave_tiles = total_tiles - full_waves_tiles;
+    int score = -1;
     if (partial_wave_tiles == 0) {
       // Perfect quantization
       // ASSERT(false);
@@ -1272,78 +1345,101 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       // cornor case: We're less than full GPU occupancy
       ASSERT(false);
     }
-    if (sm_occupancy > 1) {
-      // ???
-      ASSERT(false);
+    if ((sm_occupancy > 1 ) && (full_waves % sm_occupancy == sm_occupancy - 1)) {
+      //int max_sk_occupancy = 1;
+
+      //dp_tiles = full_waves_tiles;
+
+      //get_sk_blocks(
+      //  sk_blocks,
+      //  score,
+      //  partial_wave_tiles,
+      //  iters_per_tile,
+      //  num_sms,
+      //  max_sk_occupancy,
+      //  true);                 // we can run with less than a full wave of SK-blocks
+
+      std::cout << "[warning] just skip for now... (should be affecting A100)" << std::endl;
+
+      // if (score >= 0)
+      //     return;
+      //ASSERT(false);
     }
 
-    dp_tiles = full_waves_tiles - num_sms;  // this gives 1 wave to sk
-    int max_sk_occupancy = sm_occupancy - ((full_waves - 1) % sm_occupancy);
+    if (score<0) {
+      dp_tiles = full_waves_tiles - num_sms;  // this gives 1 wave to sk
+      int max_sk_occupancy = sm_occupancy - ((full_waves - 1) % sm_occupancy);
+      get_sk_blocks(
+        sk_blocks,
+        score,
+        partial_wave_tiles + num_sms,
+        iters_per_tile,
+        num_sms,
+        max_sk_occupancy,
+        false,
+        verbose);                 // we cannot run with less than a full wave of SK-blocks
+      //int sk_tiles = partial_wave_tiles + num_sms;
+      //int sk_iters = sk_tiles * iters_per_tile;
 
-    //
-    // get_sk_blocks
-    //
-    int sk_tiles = partial_wave_tiles + num_sms;
-    int sk_iters = sk_tiles * iters_per_tile;
+      //int dp_equiv_waves = (sk_tiles + num_sms - 1) / num_sms;
+      //int dp_equiv_iters = iters_per_tile * dp_equiv_waves;
 
-    int dp_equiv_waves = (sk_tiles + num_sms - 1) / num_sms;
-    int dp_equiv_iters = iters_per_tile * dp_equiv_waves;
+      //int min_sk_blocks = fast_min(num_sms, sk_tiles + 1);
+      //int max_sk_blocks = fast_min(num_sms * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
 
-    int min_sk_blocks = fast_min(num_sms, sk_tiles + 1);
-    int max_sk_blocks = fast_min(num_sms * max_sk_occupancy, sk_iters / kMinItersPerSkBlock);
+      //if (verbose)
+      //  std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
 
-    if (verbose)
-      std::cout << "sk_tiles: " << sk_tiles << ", sk_iters: " << sk_iters << ", max_sk_occupancy: " << max_sk_occupancy << ", dp_equiv_waves: " << dp_equiv_waves << ", dp_equiv_iters: " << dp_equiv_iters << ", min_sk_blocks: " << min_sk_blocks << ", max_sk_blocks: " << max_sk_blocks << std::endl;
+      //// Number of thread blocks to produce the remaining SK tiles
+      //int savings_iters = INT_MIN;
+      //{
+      //  // heuristic for picking sk_blocks
+      //  for (int trial_sk_blocks = min_sk_blocks; trial_sk_blocks <= max_sk_blocks; ++trial_sk_blocks) {
+      //    int sk_waves = (trial_sk_blocks + num_sms - 1) / num_sms;
 
-    // Number of thread blocks to produce the remaining SK tiles
-    int sk_blocks = 0;
-    int savings_iters = INT_MIN;
-    {
-      // heuristic for picking sk_blocks
-      for (int trial_sk_blocks = min_sk_blocks; trial_sk_blocks <= max_sk_blocks; ++trial_sk_blocks) {
-        int sk_waves = (trial_sk_blocks + num_sms - 1) / num_sms;
+      //    int max_sk_iters_per_block = (sk_iters + trial_sk_blocks - 1) / trial_sk_blocks;
+      //    int sk_iter_equiv = max_sk_iters_per_block * sk_waves;
 
-        int max_sk_iters_per_block = (sk_iters + trial_sk_blocks - 1) / trial_sk_blocks;
-        int sk_iter_equiv = max_sk_iters_per_block * sk_waves;
+      //    int num_peers = ((trial_sk_blocks + sk_tiles - 1) / sk_tiles) + 1;        // add one for alignment skew
 
-        int num_peers = ((trial_sk_blocks + sk_tiles - 1) / sk_tiles) + 1;        // add one for alignment skew
+      //    float iter_cost = 0.02f * float(num_peers) * float(sk_iter_equiv);
 
-        float iter_cost = 0.02f * float(num_peers) * float(sk_iter_equiv);
+      //    if (trial_sk_blocks % sk_tiles == 0)
+      //    {
+      //      // aligned
+      //      num_peers = (trial_sk_blocks / sk_tiles);
 
-        if (trial_sk_blocks % sk_tiles == 0)
-        {
-          // aligned
-          num_peers = (trial_sk_blocks / sk_tiles);
+      //      iter_cost = 0.0f;
+      //    }
 
-          iter_cost = 0.0f;
-        }
+      //    float peer_cost = 2.0f * float(num_peers);
 
-        float peer_cost = 2.0f * float(num_peers);
+      //    float base_cost = 2.0f * float(sk_waves);
 
-        float base_cost = 2.0f * float(sk_waves);
+      //    int fixup_iter_equiv = int(base_cost + iter_cost + peer_cost);
 
-        int fixup_iter_equiv = int(base_cost + iter_cost + peer_cost);
+      //    int trial_savings_iters = dp_equiv_iters - sk_iter_equiv - fixup_iter_equiv;
 
-        int trial_savings_iters = dp_equiv_iters - sk_iter_equiv - fixup_iter_equiv;
-
-        if (trial_savings_iters >= savings_iters) {
-            savings_iters = trial_savings_iters;
-            sk_blocks = trial_sk_blocks;
-        }
+      //    if (trial_savings_iters >= savings_iters) {
+      //        savings_iters = trial_savings_iters;
+      //        sk_blocks = trial_sk_blocks;
+      //    }
+      //  }
+      //}
+      if (score < 0) {
+        // not profitable; TODO apply a dp setting
+        // ASSERT(false);
+        dp_only = true;
       }
     }
-    if (savings_iters < 0) {
-      // not profitable; TODO apply a dp setting
-      // ASSERT(false);
-      dp_only = true;
-    }
-
 
     //
     // post-process sk region
     //
+    int sk_tiles = total_tiles - dp_tiles;
     int sk_regions = 1;
     int sk_iters_per_normal_block;
+    int sk_big_blocks_per_region;
     // int reduction_blocks = 0;
     // bool remap_block_indices = false;
     int sk_waves = -1;
@@ -1357,18 +1453,19 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       sk_iters_per_normal_block = sk_iters / sk_blocks;
       int extra_sk_iters = sk_iters - (sk_iters_per_normal_block * sk_blocks);
       int sk_big_blocks = extra_sk_iters;
-      if (sk_big_blocks>0) {
-        ASSERT(false && "a problem with sk big blocks");
-      }
+      // if (sk_big_blocks>0) {
+      //   ASSERT(false && "a problem with sk big blocks");
+      // }
 
       if ((sk_blocks > sk_tiles) && (sk_blocks % sk_tiles == 0)) {
         // // Split-K decomposition
         // sk_regions = sk_tiles;
+        std::cout << "sk_blocks: " << sk_blocks << ", sk_tiles: " << sk_tiles << std::endl;
         ASSERT(false);
       }
 
       //sk_blocks_per_region = sk_blocks / sk_regions;
-      // int sk_big_blocks_per_region = sk_big_blocks / sk_regions;
+      sk_big_blocks_per_region = sk_big_blocks / sk_regions;
       sk_iters_per_region = sk_iters / sk_regions;
     }
     FastDivmod div_mod_sk_iters_per_normal_block(sk_iters_per_normal_block);
@@ -1419,6 +1516,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          sk_tiles,
          sk_waves,
          sk_iters_per_normal_block,
+        sk_big_blocks_per_region,
          iters_per_tile,
          first_problem.k(),  // all problem size k must be the same for MoE
          mma_shape_k,
@@ -1435,7 +1533,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          entries_per_block
     );
     if (verbose)
-      std::cout << "dp_only: " << dp_only << ", sk regions: " << sk_info.sk_regions << ", dp blocks: " << sk_info.dp_blocks << ", dp tiles: " << sk_info.dp_tiles << ", sk blocks: " << sk_info.sk_blocks << ", sk tiles: " << sk_info.sk_tiles << ", sk_waves: " << sk_info.sk_waves <<  std::endl;
+      std::cout << "dp_only: " << dp_only << ", sk regions: " << sk_info.sk_regions << ", dp blocks: " << sk_info.dp_blocks << ", dp tiles: " << sk_info.dp_tiles << ", sk blocks: " << sk_info.sk_blocks << ", sk tiles: " << sk_info.sk_tiles << ", sk_waves: " << sk_info.sk_waves << ", sk_iters_per_normal_block" << sk_big_blocks_per_region << ", sk_big_blocks_per_region" << sk_big_blocks_per_region <<  std::endl;
     return sk_info;
   }
 
