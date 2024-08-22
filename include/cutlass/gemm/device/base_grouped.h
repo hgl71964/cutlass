@@ -412,7 +412,7 @@ public:
     std::cout << "threadblock count: " << res << std::endl;
 
     if (res > multiprocessor_count) {
-      // hack for A100
+      // XXX hack for A100
       std::cout << "[Warning] resetting thread block count to nums of SMs" << std::endl;
       res = multiprocessor_count;
     }

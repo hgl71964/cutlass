@@ -10,7 +10,7 @@ def parse_args():
     #parser.add_argument('--id', type=int, default=0)
     parser.add_argument('-f',
                         type=str,
-                        default=None,
+                        default="benchmarks/workspace",
                         help='folder with problems')
 
     args = parser.parse_args()
