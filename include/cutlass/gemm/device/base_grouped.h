@@ -157,10 +157,10 @@ private:
     std::vector<uint8_t> host_workspace(workspace_bytes, 0);
 
     // gh512
-    int device_idx;
-    int sms;
-    cudaGetDevice(&device_idx);
-    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, device_idx);
+    //int device_idx;
+    int sms=args.threadblock_count;
+    // cudaGetDevice(&device_idx);
+    // cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, device_idx);
 
     int sm_occupancy = -1;
     int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
@@ -234,10 +234,10 @@ public:
     } else if (BaseKernel::ProblemVisitor::kRequiresPrecomputation==2) {
 
       // gh512
-      int device_idx;
-      int sms;
-      cudaGetDevice(&device_idx);
-      cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, device_idx);
+      //int device_idx;
+      int sms = args.threadblock_count;
+      //cudaGetDevice(&device_idx);
+      //cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, device_idx);
 
       int sm_occupancy = -1;
       int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
@@ -410,13 +410,6 @@ public:
 
     auto res = std::min(total_tiles, occupancy_based_block_count);
     std::cout << "threadblock count: " << res << std::endl;
-
-    if (res > multiprocessor_count) {
-      // XXX hack for A100
-      std::cout << "[Warning] resetting thread block count to nums of SMs" << std::endl;
-      res = multiprocessor_count;
-    }
-
 
     // for moe, we ensure each only m dimension varies
     int K = -1;

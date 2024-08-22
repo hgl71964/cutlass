@@ -554,7 +554,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     FastDivmod div_mod_sk_iters_per_normal_block;
     FastDivmod div_mod_sk_iters_per_big_block;
     FastDivmod div_mod_sk_iters_per_region;
-    //FastDivmod div_mod_iters_per_tile;
+    FastDivmod div_mod_iters_per_tile;
     //
       size_t partials_workspace_bytes;
       size_t barrier_workspace_bytes;
@@ -582,7 +582,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     FastDivmod div_mod_sk_iters_per_normal_block,
     FastDivmod div_mod_sk_iters_per_big_block,
     FastDivmod div_mod_sk_iters_per_region,
-    //FastDivmod div_mod_iters_per_tile,
+    FastDivmod div_mod_iters_per_tile,
     //
       size_t partials_workspace_bytes,
       size_t barrier_workspace_bytes,
@@ -604,7 +604,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,div_mod_sk_iters_per_normal_block(div_mod_sk_iters_per_normal_block)
         ,div_mod_sk_iters_per_big_block(div_mod_sk_iters_per_big_block)
         ,div_mod_sk_iters_per_region(div_mod_sk_iters_per_region)
-        //,div_mod_iters_per_tile(div_mod_iters_per_tile)
+        ,div_mod_iters_per_tile(div_mod_iters_per_tile)
         ,partials_workspace_bytes(partials_workspace_bytes)
         ,barrier_workspace_bytes(barrier_workspace_bytes)
         ,entries_per_block(entries_per_block)
@@ -740,15 +740,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   CUTLASS_DEVICE
   int get_sk_tile_idx(int iter, int iters_per_tile) const
   {
-    //int tile_idx = this->sk_runtime_ptr->div_mod_iters_per_tile.div(iter);
-    //return tile_idx;
-
-    // XXX use div_mod_iters_per_tile
-    // it seems use div_mod_iters_per_tile is slower
-    // possibly due to save too much to skInfo??
     //
+    // it seems use div_mod_iters_per_tile is slower on RTX4090
+    // but A100 is faster...
+    //
+    int tile_idx = this->sk_runtime_ptr->div_mod_iters_per_tile.div(iter);
+    return tile_idx;
 
-    return iter/iters_per_tile;
+
+    //return iter/iters_per_tile;
   }
 
   CUTLASS_DEVICE
@@ -1417,7 +1417,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     FastDivmod div_mod_sk_iters_per_normal_block(sk_iters_per_normal_block);
     FastDivmod div_mod_sk_iters_per_big_block(sk_iters_per_normal_block+1);
     FastDivmod div_mod_sk_iters_per_region(sk_iters_per_region);
-    //FastDivmod div_mod_iters_per_tile(iters_per_tile);
+    FastDivmod div_mod_iters_per_tile(iters_per_tile);
 
 
     //
@@ -1475,7 +1475,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         div_mod_sk_iters_per_normal_block,
          div_mod_sk_iters_per_big_block,
          div_mod_sk_iters_per_region,
-         //div_mod_iters_per_tile,
+         div_mod_iters_per_tile,
          //
          0,
          0,
