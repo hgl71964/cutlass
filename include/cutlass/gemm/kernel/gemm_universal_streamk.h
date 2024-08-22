@@ -1016,8 +1016,8 @@ protected:
     int dp_start_block_idx = params.block_mapping.sk_waves * params.block_mapping.avail_sms;
     int reduce_start_block_idx = dp_start_block_idx + params.block_mapping.dp_blocks;
     int grid_padding_start_block_idx = reduce_start_block_idx + params.block_mapping.reduction_blocks;
-    if (threadIdx.x == 0 && blockIdx.x == 0)
-      printf("[OVERALL] block_idx = %d, sk_padding_start_block_idx = %d, dp_start_block_idx = %d, reduce_start_block_idx = %d, grid_padding_start_block_idx = %d\n\n", block_idx, sk_padding_start_block_idx, dp_start_block_idx, reduce_start_block_idx, grid_padding_start_block_idx);
+    // if (threadIdx.x == 0 && blockIdx.x == 0)
+    //   printf("[OVERALL] block_idx = %d, sk_padding_start_block_idx = %d, dp_start_block_idx = %d, reduce_start_block_idx = %d, grid_padding_start_block_idx = %d\n\n", block_idx, sk_padding_start_block_idx, dp_start_block_idx, reduce_start_block_idx, grid_padding_start_block_idx);
     
     // one-to-one mapping
     // else if (threadIdx.x == 0)
@@ -1070,9 +1070,9 @@ protected:
 
       //if ((blockIdx.x == 0 || blockIdx.x == 1 || blockIdx.x == 127) && threadIdx.x == 0) {
       //if (threadIdx.x == 0) {
-      if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) {
-        printf("[SK]: Bid: %d, block_idx = %d, block_iter_begin = %d, block_iter_end = %d, block_iters_remaining = %d, tile_idx = %d, coord: %dx%dx%d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iters_remaining: %d, tile_work.k_end: %d\n", blockIdx.x, block_idx, block_iter_begin, block_iter_end, block_iters_remaining, tile_idx, tile_work.tiled_coord.m(), tile_work.tiled_coord.n(), tile_work.tiled_coord.k(), tile_work.iter_begin, tile_work.k_begin, tile_work.k_iters_remaining, tile_work.k_end);
-      }
+      // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) {
+      //   printf("[SK]: Bid: %d, block_idx = %d, block_iter_begin = %d, block_iter_end = %d, block_iters_remaining = %d, tile_idx = %d, coord: %dx%dx%d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iters_remaining: %d, tile_work.k_end: %d\n", blockIdx.x, block_idx, block_iter_begin, block_iter_end, block_iters_remaining, tile_idx, tile_work.tiled_coord.m(), tile_work.tiled_coord.n(), tile_work.tiled_coord.k(), tile_work.iter_begin, tile_work.k_begin, tile_work.k_iters_remaining, tile_work.k_end);
+      // }
       
 
     } else {
@@ -1118,9 +1118,9 @@ protected:
         tile_idx--;
         init_sk_tile_work(tile_work, tile_idx, block_iter_begin, block_iter_begin + block_iters_remaining);
 
-        if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) {
-          printf("[SK-NEXT]: Bid: %d, block_iter_begin = %d, block_iters_remaining = %d, tile_idx = %d, coord: %dx%dx%d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iters_remaining: %d, tile_work.k_end: %d\n", blockIdx.x, block_iter_begin, block_iters_remaining, tile_idx, tile_work.tiled_coord.m(), tile_work.tiled_coord.n(), tile_work.tiled_coord.k(), tile_work.iter_begin, tile_work.k_begin, tile_work.k_iters_remaining, tile_work.k_end);
-        }
+        // if ((blockIdx.x < 5 || blockIdx.x==127) && threadIdx.x == 0) {
+        //   printf("[SK-NEXT]: Bid: %d, block_iter_begin = %d, block_iters_remaining = %d, tile_idx = %d, coord: %dx%dx%d, tile_work.iter_begin: %d, tile_work.k_begin: %d, tile_work.k_iters_remaining: %d, tile_work.k_end: %d\n", blockIdx.x, block_iter_begin, block_iters_remaining, tile_idx, tile_work.tiled_coord.m(), tile_work.tiled_coord.n(), tile_work.tiled_coord.k(), tile_work.iter_begin, tile_work.k_begin, tile_work.k_iters_remaining, tile_work.k_end);
+        // }
       }
     }
 

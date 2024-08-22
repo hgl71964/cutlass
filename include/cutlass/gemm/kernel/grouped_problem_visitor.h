@@ -1338,21 +1338,22 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       ASSERT(false);
     }
     if ((sm_occupancy > 1 ) && (full_waves % sm_occupancy == sm_occupancy - 1)) {
+      //
+      // this is common for A100
+      //
+      int max_sk_occupancy = 1;
+      dp_tiles = full_waves_tiles;
 
-      // TODO
-      //int max_sk_occupancy = 1;
-      //dp_tiles = full_waves_tiles;
-
-      //get_sk_blocks(
-      //  sk_blocks,
-      //  score,
-      //  partial_wave_tiles,
-      //  iters_per_tile,
-      //  num_sms,
-      //  max_sk_occupancy,
-      //  true,           // we can run with less than a full wave of SK-blocks
-      //  verbose
-      //  );                 
+      get_sk_blocks(
+        sk_blocks,
+        score,
+        partial_wave_tiles,
+        iters_per_tile,
+        num_sms,
+        max_sk_occupancy,
+        true,           // we can run with less than a full wave of SK-blocks
+        verbose
+        );                 
 
       //std::cout << "[warning] just skip for now... (should be affecting A100)" << std::endl;
 

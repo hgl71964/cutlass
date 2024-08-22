@@ -407,7 +407,6 @@ public:
       return params_.init_workspace(workspace, stream);
     }
 
-    std::cout << "[GemmUniversalBase::initialize()] Done" << std::endl;
     return Status::kSuccess;
   }
 
@@ -429,11 +428,11 @@ public:
     dim3 block(GemmKernel::kThreadCount, 1, 1);
     dim3 grid = params_.get_grid_dims();
 
-    std::cout << "  grid: (" << grid << "), block: (" << block << ")" << std::endl;
-    std::cout << "kEnableCudaHostAdapter: " << kEnableCudaHostAdapter << std::endl;
+    // std::cout << "  grid: (" << grid << "), block: (" << block << ")" << std::endl;
+    // std::cout << "kEnableCudaHostAdapter: " << kEnableCudaHostAdapter << std::endl;
 
-    std::cout << "[LAUNCH]: " << std::endl;
-    std::cout << std::endl;
+    // std::cout << "[LAUNCH]: " << std::endl;
+    // std::cout << std::endl;
 
     // Launch kernel
     CUTLASS_TRACE_HOST("  "
