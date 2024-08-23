@@ -558,6 +558,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //
       size_t partials_workspace_bytes;
       size_t barrier_workspace_bytes;
+    size_t sk_workspace_size ;
+    size_t tile_workspace_size ;
 
     // std::unordered_map<int, std::tuple<int, int, int>> tile_idx_to_offset{};
     int entries_per_block;  // dp entries per block
@@ -586,6 +588,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     //
       size_t partials_workspace_bytes,
       size_t barrier_workspace_bytes,
+    size_t sk_workspace_size ,
+    size_t tile_workspace_size ,
 
     int entries_per_block
     ) : sk_regions(sk_regions)
@@ -607,6 +611,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
         ,div_mod_iters_per_tile(div_mod_iters_per_tile)
         ,partials_workspace_bytes(partials_workspace_bytes)
         ,barrier_workspace_bytes(barrier_workspace_bytes)
+        ,sk_workspace_size(sk_workspace_size)
+        ,tile_workspace_size(tile_workspace_size)
         ,entries_per_block(entries_per_block)
          {}
   };
@@ -862,7 +868,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     skInfo *sk_info_ptr = reinterpret_cast<skInfo*>(params_.workspace);
     this->sk_runtime_ptr = sk_info_ptr;
     skInfo sk_info = *sk_info_ptr;
-    ptr += sizeof(skInfo);
+    ptr += sk_info.sk_workspace_size;
 
     int dp_start_block_idx = sk_info.sk_blocks * sk_info.sk_waves;
     // int dp_start_tile_idx = sk_info.sk_tiles;
@@ -905,7 +911,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // tile offset ptr
     this->tile_idx_offset_ptr = reinterpret_cast<TileIdxOffset *>(ptr);
-    ptr+=sk_info.sk_tiles * sizeof(TileIdxOffset);
+    //ptr+=sk_info.sk_tiles * sizeof(TileIdxOffset);
+    ptr+=sk_info.tile_workspace_size;
 
       // //sanity check
       // if (block_idx == 0 && threadIdx.x == 0) {
@@ -1063,7 +1070,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     size_t barrier_partial_workspace_size = get_barrier_workspace_size(sk_info, kWorkspaceBytesPerBlock) + get_partials_workspace_size(sk_info, kWorkspaceBytesPerBlock);
 
-    return sizeof(skInfo) + barrier_partial_workspace_size  + sizeof(TileIdxOffset) * sk_tiles + sizeof(ProblemInfo) * entries_per_block * block_count;
+    size_t sk_workspace_size = cacheline_align_up(sizeof(skInfo));
+    size_t tile_workspace_size = cacheline_align_up(sizeof(TileIdxOffset) * sk_tiles);
+    size_t problem_workspace_size= cacheline_align_up(sizeof(ProblemInfo) * entries_per_block * block_count);
+
+    //return sizeof(skInfo) + barrier_partial_workspace_size  + sizeof(TileIdxOffset) * sk_tiles + sizeof(ProblemInfo) * entries_per_block * block_count;
+    return sk_workspace_size + barrier_partial_workspace_size  + tile_workspace_size + problem_workspace_size;
   }
 
   static void host_precompute_streamk(const cutlass::gemm::GemmCoord* host_problem_sizes_ptr,
@@ -1096,13 +1108,20 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     sk_info.partials_workspace_bytes = partials_workspace_bytes;
     sk_info.barrier_workspace_bytes = barrier_workspace_bytes;
 
+    size_t sk_workspace_size = cacheline_align_up(sizeof(skInfo));
+    size_t tile_workspace_size = cacheline_align_up(sizeof(TileIdxOffset) * sk_info.sk_tiles);
+    sk_info.sk_workspace_size = sk_workspace_size;
+    sk_info.tile_workspace_size = tile_workspace_size;
+
+
     //
     // sk
     //
     {
       skInfo *sk_info_ptr = reinterpret_cast<skInfo*>(ptr);
       *sk_info_ptr = sk_info;
-      ptr += sizeof(skInfo);
+      //ptr += sizeof(skInfo);
+      ptr += sk_workspace_size;
     }
 
     // partial-barrier
@@ -1166,7 +1185,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
           break;
       }
 
-      ptr += sizeof(TileIdxOffset) * sk_tiles;
+      //ptr += sizeof(TileIdxOffset) * sk_tiles;
+      ptr+=tile_workspace_size;
     }
 
 
@@ -1343,21 +1363,21 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       //
       // this is common for A100
       //
-      int max_sk_occupancy = 1;
-      dp_tiles = full_waves_tiles;
+      //int max_sk_occupancy = 1;
+      //dp_tiles = full_waves_tiles;
 
-      get_sk_blocks(
-        sk_blocks,
-        score,
-        partial_wave_tiles,
-        iters_per_tile,
-        num_sms,
-        max_sk_occupancy,
-        true,           // we can run with less than a full wave of SK-blocks
-        verbose
-        );                 
+      //get_sk_blocks(
+      //  sk_blocks,
+      //  score,
+      //  partial_wave_tiles,
+      //  iters_per_tile,
+      //  num_sms,
+      //  max_sk_occupancy,
+      //  true,           // we can run with less than a full wave of SK-blocks
+      //  verbose
+      //  );                 
 
-      //std::cout << "[warning] just skip for now... (should be affecting A100)" << std::endl;
+      std::cout << "[warning] just skip for now... (should be affecting A100)" << std::endl;
 
       // if (score >= 0)
       //     return;
@@ -1482,6 +1502,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
          div_mod_sk_iters_per_region,
          div_mod_iters_per_tile,
          //
+         0,
+         0,
          0,
          0,
          //
