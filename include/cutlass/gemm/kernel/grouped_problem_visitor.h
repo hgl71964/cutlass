@@ -875,24 +875,26 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     else
       this->is_sk = false;
 
-    // init sk global-scope block extent
-    int block_iter_begin, block_iter_end, block_iters_remaining;
-    get_iter_extents(
-      block_idx,
-      sk_info.sk_iters_per_normal_block,
-      block_iter_begin,
-      block_iter_end);
-    block_iters_remaining = block_iter_end - block_iter_begin;
-    this->block_iter_begin = block_iter_begin;
-    this->block_iter_end = block_iter_end;
-    this->block_iters_remaining = block_iters_remaining;
+    if (this->is_sk) {
+      // init sk global-scope block extent
+      int block_iter_begin, block_iter_end, block_iters_remaining;
+      get_iter_extents(
+        block_idx,
+        sk_info.sk_iters_per_normal_block,
+        block_iter_begin,
+        block_iter_end);
+      block_iters_remaining = block_iter_end - block_iter_begin;
+      this->block_iter_begin = block_iter_begin;
+      this->block_iter_end = block_iter_end;
+      this->block_iters_remaining = block_iters_remaining;
 
-    // if (block_idx==107 && threadIdx.x==0) {
-    //   printf("[Check-block-iters] block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d\n", block_iter_begin, block_iter_end, block_iters_remaining);
-    // }
+      // if (block_idx==107 && threadIdx.x==0) {
+      //   printf("[Check-block-iters] block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d\n", block_iter_begin, block_iter_end, block_iters_remaining);
+      // }
+      this->sk_tile_work = TileWorkDesc{};
+      this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, sk_info.iters_per_tile);
+    }
 
-    this->sk_tile_work = TileWorkDesc{};
-    this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, sk_info.iters_per_tile);
 
     // partials and barrier ptr
     this->partials_ptr = ptr;
