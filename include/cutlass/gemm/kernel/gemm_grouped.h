@@ -864,7 +864,7 @@ public:
     // }
 
 
-    if (!tile_work.tile_finished(problem_visitor.sk_runtime_ptr->problem_size_k)) {
+    if (!tile_work.tile_finished(problem_visitor.sk_runtime_info.problem_size_k)) {
 
       // // Non "finishing" SK blocks must share their partial accumulator sums through global scratch workspace
       // share_accumulators(accumulator_tile, block_idx, first_block_idx);

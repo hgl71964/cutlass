@@ -565,6 +565,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     int entries_per_block;  // dp entries per block
 
     CUTLASS_DEVICE
+    skInfo(){}
+
+    CUTLASS_DEVICE
     skInfo(
     int sk_regions,
     int dp_blocks,
@@ -645,7 +648,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   // sk params
   //
   TileIdxOffset *tile_idx_offset_ptr;
-  skInfo *sk_runtime_ptr;
+  //skInfo *sk_runtime_ptr;
+  skInfo sk_runtime_info;
 
   void *barrier_ptr;
   void *partials_ptr;
@@ -691,7 +695,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       return (k_end == problem_size_k);
     }
   };
-  TileWorkDesc sk_tile_work;
+  TileWorkDesc sk_tile_work{};
 
 
   //
@@ -720,7 +724,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   {
     int block_idx_in_region = sk_block_idx;
     //int region_idx = 0;
-    int sk_big_blocks_per_region = this->sk_runtime_ptr->sk_big_blocks_per_region;
+    int sk_big_blocks_per_region = this->sk_runtime_info.sk_big_blocks_per_region;
 
     // only one region
     //assert(region_idx == 0);
@@ -750,7 +754,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // it seems use div_mod_iters_per_tile is slower on RTX4090
     // but A100 is faster...
     //
-    int tile_idx = this->sk_runtime_ptr->div_mod_iters_per_tile.div(iter);
+    int tile_idx = this->sk_runtime_info.div_mod_iters_per_tile.div(iter);
     return tile_idx;
 
 
@@ -769,7 +773,7 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // The first global-scoped MAC-iteration for this tile
     // int tile_iter_begin = tile_idx * params.block_mapping.iters_per_tile();
-    int tile_iter_begin = tile_idx * this->sk_runtime_ptr->iters_per_tile;
+    int tile_iter_begin = tile_idx * this->sk_runtime_info.iters_per_tile;
 
     // The first global-scoped MAC-iteration this threadblock will perform for this tile
     tile_work.iter_begin = max(block_iter_begin, tile_iter_begin);
@@ -785,15 +789,15 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
 
     // The starting index in the k-domain for MAC-iterations this threadblock will perform for this tile
     //tile_work.k_begin = k_iter_begin * Mma::Shape::kK;
-    tile_work.k_begin = k_iter_begin * this->sk_runtime_ptr->mma_shape_k;
+    tile_work.k_begin = k_iter_begin * this->sk_runtime_info.mma_shape_k;
 
     // The ending index (one-past) in the k-domain for MAC-iterations this threadblock will perform for this tile
     //tile_work.k_end = min(
     //    params.block_mapping.problem_size.k(),            // extent of k domain
     //    (k_iter_end * Mma::Shape::kK));                   // extent of the threadblock's global iteration assignment
     tile_work.k_end = min(
-        this->sk_runtime_ptr->problem_size_k,            // extent of k domain
-        (k_iter_end * this->sk_runtime_ptr->mma_shape_k)
+        this->sk_runtime_info.problem_size_k,            // extent of k domain
+        (k_iter_end * this->sk_runtime_info.mma_shape_k)
     );
 
     // The location of this tile (in threadblock-tile coordinates) in the output matrix
@@ -810,23 +814,23 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   int get_first_block_idx(int tile_idx) const
   {
     // global-scope
-    int iter = tile_idx * this->sk_runtime_ptr->iters_per_tile;
+    int iter = tile_idx * this->sk_runtime_info.iters_per_tile;
 
     // assume num_region = 1
     int region_idx = 0;
     int iter_in_region = 0;
-    this->sk_runtime_ptr->div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
+    this->sk_runtime_info.div_mod_sk_iters_per_region(region_idx, iter_in_region, iter);
     // assert(region_idx == 0);
     // assert(iter_in_region == iter);
-    int sk_big_blocks_per_region = this->sk_runtime_ptr->sk_big_blocks_per_region;
+    int sk_big_blocks_per_region = this->sk_runtime_info.sk_big_blocks_per_region;
 
     // number of iterations in the region's big blocks
-    int big_block_iters = (sk_big_blocks_per_region * this->sk_runtime_ptr->sk_iters_per_normal_block) + sk_big_blocks_per_region;   
+    int big_block_iters = (sk_big_blocks_per_region * this->sk_runtime_info.sk_iters_per_normal_block) + sk_big_blocks_per_region;   
     // number of iterations in the region's normal blocks
     int normal_block_iters = iter_in_region - big_block_iters; 
 
-    int big_block_idx_in_region = this->sk_runtime_ptr->div_mod_sk_iters_per_big_block.div(iter_in_region);
-    int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_ptr->div_mod_sk_iters_per_normal_block.div(normal_block_iters);
+    int big_block_idx_in_region = this->sk_runtime_info.div_mod_sk_iters_per_big_block.div(iter_in_region);
+    int normal_block_idx_in_region = sk_big_blocks_per_region + this->sk_runtime_info.div_mod_sk_iters_per_normal_block.div(normal_block_iters);
 
 
     int block_idx_in_region = (big_block_idx_in_region < sk_big_blocks_per_region) ?
@@ -857,7 +861,6 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
   tile_idx_offset_ptr(nullptr),
   barrier_ptr(nullptr),
   partials_ptr(nullptr),
-  sk_runtime_ptr(nullptr),
   problem_info_ptr(nullptr)
   {
     uint8_t *ptr = reinterpret_cast<uint8_t*>(params_.workspace);
@@ -866,8 +869,8 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // sk related (can we move this to static schedule? and just prefetch?)
     //
     skInfo *sk_info_ptr = reinterpret_cast<skInfo*>(params_.workspace);
-    this->sk_runtime_ptr = sk_info_ptr;
     skInfo sk_info = *sk_info_ptr;
+    this->sk_runtime_info = sk_info;
     ptr += sk_info.sk_workspace_size;
 
     int dp_start_block_idx = sk_info.sk_blocks * sk_info.sk_waves;
@@ -876,12 +879,9 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
     // if (block_idx == 0 && threadIdx.x == 0) {
     //   printf("[SK]: dp_start_block_idx: %d, dp_start_tile_idx: %d, sk_iters: %d\n", dp_start_block_idx, dp_start_tile_idx, this->sk_runtime_ptr->sk_iters_per_normal_block);
     // }
-    if (dp_start_block_idx > 0)
+    if (dp_start_block_idx > 0) {
       this->is_sk = true;
-    else
-      this->is_sk = false;
 
-    if (this->is_sk) {
       // init sk global-scope block extent
       int block_iter_begin, block_iter_end, block_iters_remaining;
       get_iter_extents(
@@ -897,10 +897,12 @@ struct GroupedProblemVisitor<ProblemSizeHelper,
       // if (block_idx==107 && threadIdx.x==0) {
       //   printf("[Check-block-iters] block_iter_begin: %d, block_iter_end: %d, block_iters_remaining: %d\n", block_iter_begin, block_iter_end, block_iters_remaining);
       // }
-      this->sk_tile_work = TileWorkDesc{};
+      //this->sk_tile_work = TileWorkDesc{};
       this->sk_tile_idx = get_sk_tile_idx(block_iter_end - 1, sk_info.iters_per_tile);
-    }
 
+    }
+    else
+      this->is_sk = false;
 
     // partials and barrier ptr
     this->partials_ptr = ptr;
@@ -1544,7 +1546,7 @@ public:
       if (this->block_iters_remaining == 0) {
 
         // switch to dp
-        this->tile_idx += this->sk_runtime_ptr->sk_tiles;
+        this->tile_idx += this->sk_runtime_info.sk_tiles;
         this->is_sk = false;
 
         // if ((blockIdx.x == 0 ) && threadIdx.x == 0)
